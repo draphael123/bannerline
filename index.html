@@ -69,7 +69,8 @@ try{
 // Campaign save, separate from display options so wiping settings doesn't
 // wipe progress. Must be declared before reset() reads it at boot.
 const SAVE = { campaignVersion:3, progress:1, renown:0, unlocked:{}, upgrades:{},
-               won:false, loadout:["spear","knight","archer"] };
+               won:false, loadout:["spear","knight","archer"], spells:[],
+               unlockedSpells:{}, spellUpgrades:{}, spellSlots:1, unitUpgrades:{} };
 try{
   const raw = localStorage.getItem("bannerline.save");
   if(raw){
@@ -88,6 +89,10 @@ try{
     }
     Object.assign(SAVE, loaded);
     delete SAVE.hero;
+    SAVE.spells=SAVE.spells||[]; SAVE.spellUpgrades=SAVE.spellUpgrades||{};
+    SAVE.unlockedSpells=SAVE.unlockedSpells||{};
+    for(const k of SAVE.spells) SAVE.unlockedSpells[k]=true;
+    SAVE.spellSlots=SAVE.spellSlots||1; SAVE.unitUpgrades=SAVE.unitUpgrades||{};
   }
 }catch(e){}
 function saveGame(){
@@ -95,7 +100,8 @@ function saveGame(){
 }
 function wipeSave(){
   SAVE.campaignVersion=3; SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
-  delete SAVE.hero; SAVE.loadout=["spear","knight","archer"];
+  delete SAVE.hero; SAVE.loadout=["spear","knight","archer"]; SAVE.spells=[];
+  SAVE.unlockedSpells={}; SAVE.spellUpgrades={}; SAVE.spellSlots=1; SAVE.unitUpgrades={};
   saveGame();
 }
 const UPGRADES = [
@@ -111,11 +117,35 @@ const UPGRADES = [
     desc:l=>"+9% gold income  (now +"+(l*9)+"%)" },
   { key:"muster", name:"STANDING ARMY",    max:2, cost:l=>90+l*70,
     desc:l=>"+9 starting gold  (now "+(12+l*9)+")" },
+  { key:"moat", name:"CASTLE MOAT", max:3, cost:l=>150+l*100,
+    desc:l=>l===0?"visible ditch slows enemies at your wall"
+                 :"enemies near your keep slowed "+(18+l*8)+"%" },
+  { key:"mageTower", name:"MAGE TOWER", max:3, cost:l=>180+l*110,
+    desc:l=>l===0?"visible tower launches arcane blasts"
+                 :"blast every "+(10-l)+"s  (level "+l+")" },
 ];
 function upLvl(k){ return SAVE.upgrades[k] || 0; }
 function keepMaxHp(){ return 520 + upLvl("keepHp")*90; }
 function incomeMul(){ return 1 + upLvl("income")*0.09; }
 function startGold(){ return 12 + upLvl("muster")*9; }
+function unitLvl(k){ return SAVE.unitUpgrades[k]||0; }
+function spellLvl(k){ return SAVE.spellUpgrades[k]||0; }
+const SPELLS = {
+  firestorm:{name:"FIRESTORM", unlock:140, cd:28, color:"#ff8748",
+    desc:"Burn every enemy in the chosen lane."},
+  arrowrain:{name:"ARROW RAIN", unlock:120, cd:24, color:"#dbe6c4",
+    desc:"A concentrated volley into the chosen lane."},
+  reinforce:{name:"REINFORCE", unlock:110, cd:32, color:"#76c9f1",
+    desc:"Call defenders directly into the chosen lane."},
+  healing:{name:"HEALING LIGHT", unlock:160, cd:30, color:"#9ff0b0",
+    desc:"Restore troops fighting in the chosen lane."},
+};
+const UNIT_TRAINING = [
+  {key:"spear",name:"SPEAR DRILL",desc:"Spearmen periodically brace against heavy foes."},
+  {key:"knight",name:"SHIELD WALL",desc:"Knights periodically guard nearby allies."},
+  {key:"archer",name:"VOLLEY DRILL",desc:"Archers periodically loose a faster second shot."},
+  {key:"mage",name:"ARCANE SURGE",desc:"Mages periodically amplify their next blast."},
+];
 
 function saveOpt(){
   try{ localStorage.setItem("bannerline.opt", JSON.stringify(OPT)); }catch(e){}
@@ -852,25 +882,65 @@ function artStoneKing(c,K,frame){
   R(c,4,12+B,8,31,"#66727a"); R(c,39,10+B,9,34,"#55616a");
   R(c,12,-14+B,25,5,"#d5dce0"); R(c,19,-20+B,6,9,"#eef3f5");
 }
+function artPaladin(c,K,frame){
+  artKnight(c,K,frame); const B=[0,-1,0,-1,0][frame];
+  R(c,9,10+B,10,3,"#f5c53f"); R(c,12,20+B,4,9,"#fff0a0");
+}
+function artRanger(c,K,frame){
+  artArcher(c,K,frame); const B=[0,-1,0,-1,0][frame];
+  R(c,5,5+B,13,3,"#4d7f50"); R(c,3,17+B,5,15,"#365e3e");
+}
+function artWolfRider(c,K,frame){
+  artGobRunner(c,K,frame); const B=[0,-1,0,-1,0][frame];
+  R(c,2,28+B,27,8,"#795336"); R(c,21,24+B,10,8,"#9a704a");
+  R(c,4,35+B,4,5,"#3d2b1d"); R(c,21,35+B,4,5,"#3d2b1d");
+}
+function artIceTroll(c,K,frame){
+  artGobShield(c,K,frame); const B=[0,-1,0,-1,0][frame];
+  R(c,13,5+B,17,12,"#80b7c4"); R(c,17,8+B,3,3,"#e9fbff");
+  R(c,25,8+B,3,3,"#e9fbff"); R(c,32,18+B,7,20,"#b9e1e8");
+}
+function artSalamander(c,K,frame){
+  artGobBomber(c,K,frame); const B=[0,-1,0,-1,0][frame];
+  R(c,4,27+B,23,8,"#b94d2f"); R(c,0,30+B,8,5,"#e46b36");
+  R(c,1,31+B,4,3,"#ffd45a");
+}
+function artHarpy(c,K,frame){
+  artGobRunner(c,K,frame); const B=[0,-2,0,2,0][frame];
+  R(c,0,10+B,12,5,"#b79ad0"); R(c,20,8-B,12,5,"#d0b8e2");
+  R(c,5,15+B,6,13,"#73558a"); R(c,21,15+B,6,13,"#73558a");
+}
+function artSiegeRam(c,K,frame){
+  artGobBrute(c,K,frame); const B=[0,-1,0,-1,0][frame];
+  R(c,0,20+B,38,11,"#68462d"); R(c,2,17+B,34,4,"#9a704a");
+  R(c,33,21+B,7,8,"#b8b29d"); R(c,5,31+B,6,6,"#34271d");
+  R(c,27,31+B,6,6,"#34271d");
+}
 
 const UNIT_ART = {
   "1":  { spear:artSpear,     knight:artKnight,    archer:artArcher,
           mage:artMage,       captain:artCaptain,
-          outrider:artOutrider, sapper:artSapper },
+          outrider:artOutrider, sapper:artSapper, paladin:artPaladin,
+          ranger:artRanger },
   "-1": { spear:artGobSpear, knight:artGobBrute, archer:artGobShaman,
           runner:artGobRunner, shield:artGobShield, bomber:artGobBomber,
           overchief:artOverchieftain, frostroc:artFrostRoc, ashtyrant:artAshTyrant,
           stormroc:artStormRoc, stoneking:artStoneKing,
+          wolfrider:artWolfRider, icetroll:artIceTroll, salamander:artSalamander,
+          harpy:artHarpy, siegeram:artSiegeRam,
           warchief:artWarchief, chieftain:artChieftain },
 };
 const UNIT_BOX = {
   "1":  { spear:{w:30,h:40}, knight:{w:27,h:47}, archer:{w:26,h:40},
           mage:{w:32,h:44},  captain:{w:34,h:56},
-          outrider:{w:30,h:40}, sapper:{w:34,h:41} },
+          outrider:{w:30,h:40}, sapper:{w:34,h:41},
+          paladin:{w:27,h:47}, ranger:{w:26,h:40} },
   "-1": { spear:{w:30,h:38}, knight:{w:36,h:47}, archer:{w:30,h:48},
           runner:{w:32,h:40}, shield:{w:42,h:48}, bomber:{w:40,h:43},
           overchief:{w:52,h:70}, frostroc:{w:60,h:48}, ashtyrant:{w:58,h:62},
           stormroc:{w:60,h:48}, stoneking:{w:54,h:72},
+          wolfrider:{w:34,h:42}, icetroll:{w:44,h:52}, salamander:{w:42,h:44},
+          harpy:{w:34,h:42}, siegeram:{w:42,h:49},
           warchief:{w:48,h:62}, chieftain:{w:42,h:54} },
 };
 const SPR = {};                               // SPR[type][side][frame] / .flash
@@ -1133,6 +1203,17 @@ const TYPES = {
     reach:2.6, dmg:6, rate:1.3, cls:"heavy", keepMul:11.0,
     beats:"WALLS", hint:"Useless in a fight. Escort it.",
   },
+  paladin: {
+    key:"paladin", name:"PALADIN", cost:34, hp:440, speed:3.1,
+    reach:3.1, dmg:20, rate:1.15, cls:"heavy", armor:{arrow:0.32},
+    cleave:3.0, cleaveMult:0.3, bigTarget:true,
+    beats:"THE LINE", hint:"Expensive holy bulwark.",
+  },
+  ranger: {
+    key:"ranger", name:"RANGER", cost:27, hp:82, speed:5.6,
+    reach:20, dmg:20, rate:0.72, cls:"light", ranged:true, laneSpill:1,
+    bonus:{light:1.65}, beats:"SKIRMISHERS", hint:"Fast elite marksman.",
+  },
   runner: {
     key:"runner", name:"GOBLIN RUNNER", cost:7, hp:42, speed:11.5,
     reach:2.5, dmg:7, rate:0.58, cls:"light", raider:true,
@@ -1147,6 +1228,33 @@ const TYPES = {
     key:"bomber", name:"FIRE BOMBER", cost:16, hp:62, speed:3.8,
     reach:14, dmg:24, rate:1.65, cls:"light", ranged:true, laneSpill:1, aoe:5,
     beats:"CLUSTERS", hint:"Punishes a packed formation.",
+  },
+  wolfrider: {
+    key:"wolfrider", name:"WOLF RIDER", cost:13, hp:88, speed:12.2,
+    reach:2.8, dmg:11, rate:0.66, cls:"light", laneSpill:1,
+    beats:"GAPS", hint:"Marches debut. Returns later.",
+  },
+  icetroll: {
+    key:"icetroll", name:"ICE TROLL", cost:24, hp:470, speed:2.45,
+    reach:3.3, dmg:19, rate:1.38, cls:"heavy", armor:{arrow:0.45},
+    cleave:3.4, cleaveMult:0.35, bigTarget:true,
+    beats:"ARROWS", hint:"Frostreach brute.",
+  },
+  salamander: {
+    key:"salamander", name:"SALAMANDER", cost:20, hp:105, speed:4.5,
+    reach:12, dmg:26, rate:1.45, cls:"light", ranged:true, aoe:4.5,
+    beats:"CLUSTERS", hint:"Ember fire-beast.",
+  },
+  harpy: {
+    key:"harpy", name:"HARPY", cost:18, hp:72, speed:9.2,
+    reach:3.2, dmg:15, rate:0.78, cls:"light", flying:true, laneSpill:1,
+    armor:{arrow:1.2}, beats:"BACK LINES", hint:"Skyward lane-hunter.",
+  },
+  siegeram: {
+    key:"siegeram", name:"SIEGE RAM", cost:29, hp:520, speed:2.2,
+    reach:3.0, dmg:9, rate:1.35, cls:"heavy", keepMul:6.0,
+    armor:{arrow:0.28}, bigTarget:true,
+    beats:"CASTLES", hint:"Crown Range wall-breaker.",
   },
   captain: {
     // Retained as a future expensive mortal unit; it is not currently sold.
@@ -1198,8 +1306,9 @@ const TYPES = {
     beats:"THE UNWORTHY", hint:"Break the crown with massed spears.",
   },
 };
-const ROSTER_ALL = ["spear","knight","archer","mage","outrider","sapper"];
-const ENEMY_ONLY = ["runner","shield","bomber","overchief","frostroc","ashtyrant","stormroc","stoneking"];
+const ROSTER_ALL = ["spear","knight","archer","mage","outrider","sapper","paladin","ranger"];
+const ENEMY_ONLY = ["runner","shield","bomber","wolfrider","icetroll","salamander","harpy","siegeram",
+  "overchief","frostroc","ashtyrant","stormroc","stoneking"];
 const ORDER = ["spear","knight","archer"];
 // The buyable roster grows as you unlock. Everything is baked at boot; only
 // the shop decides what you may actually field.
@@ -1262,7 +1371,10 @@ function pressure(){ return battle().pressure || 1; }
 function hordeResponse(){
   let n = 0;
   if(SAVE.unlocked.mage) n += 1.2;
-  n += upLvl("keepHp") + upLvl("income") + upLvl("muster");
+  n += upLvl("keepHp") + upLvl("income") + upLvl("muster") +
+       upLvl("moat") + upLvl("mageTower");
+  n += Object.values(SAVE.unitUpgrades||{}).reduce((a,b)=>a+b,0)*.65;
+  n += Object.values(SAVE.spellUpgrades||{}).reduce((a,b)=>a+b,0)*.45;
   return 1 + n * 0.052;
 }
 
@@ -1374,9 +1486,10 @@ const G = {
   ignorePortrait:false,
   lane:2, laneFlash:0, bossOut:false, holdT:0, geyT:0, geyFire:0,
   objects:[], hazardT:0, hazardRow:2, hazardFire:0, blizzard:0,
+  spellCd:{}, spellFlash:0,
   balT:0, balShot:null,
   tut:{on:false, i:0, t:0, laneMoved:false},
-  t:0, over:null, speed:1, paused:false,
+  t:0, over:null, speed:.5, paused:false,
   gold:12, goldMax:48,
   eGold:12, eBrainCd:0,
   units:[], shots:[], nums:[], parts:[], corpses:[], dust:[], rings:[],
@@ -1417,7 +1530,7 @@ function resetBattleObjects(){
 }
 
 function reset(){
-  G.t=0; G.over=null; G.speed=1;
+  G.t=0; G.over=null; G.speed=.5; G.spellCd={}; G.spellFlash=0;
   G.gold=startGold(); G.eGold=12; G.eBrainCd=1.2;
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
   G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
@@ -1428,13 +1541,42 @@ function reset(){
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false; G.holdT=0;
-  G.geyT=0; G.geyFire=0; G.balT=0; G.balShot=null;
+  G.geyT=0; G.geyFire=0; G.balT=0; G.balShot=null; G.mageT=0; G.mageShot=null;
   G.hazardT=0; G.hazardRow=2; G.hazardFire=0; G.blizzard=0;
   G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
   G.stats={sent:0, spent:0, kills:0, maxFront:50};
   resetBanners();
   resetBattleObjects();
+}
+
+function equippedSpells(){
+  return (SAVE.spells||[]).filter(k=>SPELLS[k]).slice(0,SAVE.spellSlots||1);
+}
+function castSpell(key){
+  const S=SPELLS[key],lvl=spellLvl(key);
+  if(!S||G.over||G.scene!=="play"||(G.spellCd[key]||0)>0) return false;
+  const row=G.lane, foes=G.units.filter(u=>!u.dead&&u.side<0&&u.row===row);
+  const friends=G.units.filter(u=>!u.dead&&u.side>0&&u.row===row);
+  if(key==="firestorm"){
+    for(const u of foes){ damage(u,42+lvl*18,"fire"); u.kb-=1.2; }
+    for(let i=0;i<34;i++) G.parts.push({x:15+Math.random()*75,y:ROW_Y[row],
+      vx:(Math.random()*2-1)*24,vy:-Math.random()*120-25,life:.45+Math.random()*.55,
+      c:i%2?"#ff6a2c":"#ffd45a",s:2});
+  } else if(key==="arrowrain"){
+    for(const u of foes) damage(u,34+lvl*13,"arrow");
+    for(let i=0;i<24;i++) G.stuck.push({x:12+Math.random()*78,y:ROW_Y[row],
+      life:1.3,side:1,angle:.85});
+  } else if(key==="reinforce"){
+    const n=2+lvl;
+    for(let i=0;i<n;i++){ const u=spawn(i===n-1&&lvl>1?"knight":"spear",1,row);u.x=3-i*1.4; }
+  } else if(key==="healing"){
+    for(const u of friends){ u.hp=Math.min(u.maxHp,u.hp+65+lvl*28); u.guardT=Math.max(u.guardT,1.5); }
+  }
+  G.spellCd[key]=Math.max(10,S.cd-lvl*4); G.spellFlash=1;
+  G.toast=S.name; G.toastT=1.2; G.shake=Math.max(G.shake,key==="firestorm"?5:2);
+  tone(key==="healing"?720:key==="reinforce"?440:220,.35,"sawtooth",.045,1.8);
+  return true;
 }
 reset();
 
@@ -1457,17 +1599,19 @@ function pickRow(side){
 
 function spawn(typeKey, side, row){
   const T = TYPES[typeKey];
+  const training = side>0 ? unitLvl(typeKey) : 0;
+  const trainedHp = Math.round(T.hp*(1+training*.08));
   const r = nearestOpenLane(row===undefined ? pickRow(side) : row);
   const u = {
     id:UID++, side, T, type:typeKey, row:r,
     x: side>0 ? -2 : 102,
     y: ROW_Y[r] + (Math.random()*2-1)*1.5,
-    hp:T.hp, maxHp:T.hp,
+    hp:trainedHp, maxHp:trainedHp, training, powerMul:1+training*.07,
     cd: 0.25 + Math.random()*0.3,
     vox: (Math.random()*2-1)*1.7,
     vari: Math.floor(Math.random()*VARIANTS.length),
     flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0, slide:0, fighting:false,
-    pop:1, step:Math.random()*6.28, lastStep:0, specialT:0,
+    pop:1, step:Math.random()*6.28, lastStep:0, specialT:0, skillT:0, guardT:0,
   };
   G.units.push(u);
   return u;
@@ -1491,6 +1635,7 @@ function damage(u, amount, src){
   if(u.dead) return;
   let a = amount;
   if(src && u.T.armor && u.T.armor[src]) a *= u.T.armor[src];
+  if(u.guardT>0) a *= 0.68;
   u.hp -= a;
   u.flash = 0.14;
   pushNum(u.x, u.y, Math.round(a), u.side>0 ? "#ffd8c8" : "#fff4b8");
@@ -1561,20 +1706,23 @@ function attack(u, target){
   const rally = u.rallyT > 0;
   const morale = bannerMorale(u);
   const weather = T.ranged ? (1-G.blizzard*0.42) : 1;
-  u.cd = rally ? T.rate/1.45 : T.rate/(morale?1.10:1);
+  const skill=u.volleyT>0||u.surgeT>0;
+  u.cd = (rally ? T.rate/1.45 : T.rate/(morale?1.10:1))*(skill ? .58 : 1);
   u.atkAnim = 0.24;
   if(T.ranged){
     G.shots.push({
       x:u.x, y:u.y-18, tx:target.x, ty:target.y-14, side:u.side,
       t:0, dur: Math.max(0.16, Math.abs(target.x-u.x)*0.015),
-      dmg: T.dmg * ((T.bonus && T.bonus[target.T.cls]) || 1) *
+      dmg: T.dmg * (u.powerMul||1) * (u.surgeT>0?1.45:1) *
+           ((T.bonus && T.bonus[target.T.cls]) || 1) *
            (rally?1.15:morale?1.10:1) * weather,
       src:"arrow", target, aoe:T.aoe||0, row:target.row,
     });
     tone(T.aoe ? 300 : 900, 0.05, T.aoe?"sawtooth":"triangle", 0.022, T.aoe?1.8:0.6);
     return;
   }
-  const mult = ((T.bonus && T.bonus[target.T.cls]) || 1) * (rally ? 1.15 : morale ? 1.10 : 1);
+  const mult = ((T.bonus && T.bonus[target.T.cls]) || 1) *
+    (rally ? 1.15 : morale ? 1.10 : 1) * (u.powerMul||1);
   G.slashes.push({ x:(u.x+target.x)/2, y:(u.y+target.y)/2 - 14, row:u.row,
                    side:u.side, big:!!T.cleave, t:0 });
   damage(target, T.dmg * mult, "melee");
@@ -1583,7 +1731,7 @@ function attack(u, target){
       if(o.dead || o.side===u.side || o===target) continue;
       if(Math.abs(o.row - target.row) > 1) continue;
       if(Math.abs(o.x - target.x) < T.cleave)
-        damage(o, T.dmg*(T.cleaveMult||0.5)*((T.bonus&&T.bonus[o.T.cls])||1), "melee");
+        damage(o, T.dmg*(u.powerMul||1)*(T.cleaveMult||0.5)*((T.bonus&&T.bonus[o.T.cls])||1), "melee");
     }
     addScar(target.x, target.y, 1);
     G.shake = Math.max(G.shake, 1.8);
@@ -1599,7 +1747,7 @@ function attack(u, target){
 
 function attackKeep(u, keep){
   u.cd = u.T.rate; u.atkAnim = 0.24;
-  const dmg = u.T.dmg * (u.T.keepMul || (u.T.ranged ? 0.30 : 0.85));
+  const dmg = u.T.dmg * (u.powerMul||1) * (u.T.keepMul || (u.T.ranged ? 0.30 : 0.85));
   keep.hp = Math.max(0, keep.hp - dmg);
   pushNum(keep.x + (u.side>0?-4:4), -30, Math.round(dmg), "#ffe08a");
   G.shake = Math.max(G.shake, 2.6);
@@ -1721,9 +1869,13 @@ function enemyBrain(dt){
   else if(ps >= D.counterAt*2){ want = "archer"; commit = true; }
   else {
     const r = Math.random(), comp = battle().comp;
-    const specials = battle().world===0 ? ["runner","shield"]
-                   : battle().world===1 ? ["runner","shield"]
-                   : ["bomber","shield"];
+    // Each world introduces one signature enemy; later regions may reuse
+    // everything already encountered, so the horde's vocabulary accumulates.
+    const specials = battle().world===0 ? ["runner","shield","wolfrider"]
+                   : battle().world===1 ? ["wolfrider","shield","icetroll"]
+                   : battle().world===2 ? ["wolfrider","icetroll","salamander","bomber"]
+                   : battle().world===3 ? ["icetroll","salamander","harpy","shield"]
+                   : ["salamander","harpy","siegeram","icetroll"];
     if(G.battle > 2 && r < 0.24) want = specials[Math.floor(Math.random()*specials.length)];
     else if(comp === "swarm") want = r<0.72 ? "spear"  : r<0.90 ? "knight" : "archer";
     else if(comp === "heavy") want = r<0.30 ? "spear"  : r<0.80 ? "knight" : "archer";
@@ -1743,6 +1895,8 @@ function update(dt){
   G.t += dt;
   G.timeLeft = Math.max(0, G.timeLeft - dt);
   G.gold = Math.min(G.goldMax, G.gold + goldRate(1) * dt);
+  for(const k of Object.keys(G.spellCd)) G.spellCd[k]=Math.max(0,G.spellCd[k]-dt);
+  G.spellFlash=Math.max(0,G.spellFlash-dt*2.5);
   enemyBrain(dt);
 
   // --- your keep defends itself -----------------------------------------
@@ -1802,6 +1956,22 @@ function update(dt){
     }
     if(G.geyFire > 0) G.geyFire -= dt;
   }
+  const tower=upLvl("mageTower");
+  if(tower>0){
+    G.mageT+=dt;
+    if(G.mageT>=11-tower){
+      G.mageT=0;
+      let target=null;
+      for(const u of G.units) if(!u.dead&&u.side<0&&(!target||u.x<target.x)) target=u;
+      if(target){
+        G.mageShot={x:G.keepP.x+3,y:-58,tx:target.x,ty:target.y-15,t:0,dur:.48};
+        for(const u of G.units) if(!u.dead&&u.side<0&&Math.abs(u.x-target.x)<5&&Math.abs(u.row-target.row)<=1)
+          damage(u,30+tower*12,"blast");
+        G.rings.push({x:target.x,y:target.y-12,r:3,life:.55,c:"#9a83e0"});
+        tone(260,.28,"sine",.045,2.2);
+      }
+    }
+  }
   if(battle().mechanic==="blizzard"){
     const phase=G.t%18;
     const target=phase>=10&&phase<15 ? 1 : 0;
@@ -1857,10 +2027,31 @@ function update(dt){
     u.cd -= dt;
     u.flash = Math.max(0, u.flash - dt);
     if(u.rallyT) u.rallyT = Math.max(0, u.rallyT - dt);
+    if(u.guardT) u.guardT = Math.max(0,u.guardT-dt);
+    if(u.volleyT) u.volleyT = Math.max(0,u.volleyT-dt);
+    if(u.surgeT) u.surgeT = Math.max(0,u.surgeT-dt);
     u.atkAnim = Math.max(0, u.atkAnim - dt);
     u.pop = Math.max(0, u.pop - dt*3.2);
     u.bob += dt*9;
     u.specialT += dt;
+    u.skillT += dt;
+
+    // Trained troops gain an active battlefield behavior without adding
+    // another row of buttons to the deployment tray.
+    if(u.side>0&&u.training>0){
+      const cadence=Math.max(6,12-u.training*2);
+      if(u.type==="spear"&&u.skillT>=cadence){
+        u.skillT=0; u.guardT=3.5; G.toast="SPEARS BRACED"; G.toastT=.8;
+      } else if(u.type==="knight"&&u.skillT>=cadence+1){
+        u.skillT=0;
+        for(const a of G.units) if(!a.dead&&a.side>0&&a.row===u.row&&Math.abs(a.x-u.x)<7) a.guardT=3;
+        G.toast="SHIELD WALL"; G.toastT=.8;
+      } else if(u.type==="archer"&&u.skillT>=cadence){
+        u.skillT=0; u.volleyT=3; G.toast="VOLLEY"; G.toastT=.7;
+      } else if(u.type==="mage"&&u.skillT>=cadence+2){
+        u.skillT=0; u.surgeT=3.5; G.toast="ARCANE SURGE"; G.toastT=.7;
+      }
+    }
 
     if((u.type==="frostroc"||u.type==="stormroc") && u.specialT >= 4.8){
       u.specialT = 0;
@@ -1936,7 +2127,9 @@ function update(dt){
       // SUPPLY LINE: you move fast across ground you own.
       const ownLand = u.side>0 ? (u.x < G.front - 2) : (u.x > G.front + 2);
       const climb=world().elevation ? (0.92-Math.floor(Math.max(0,u.x)/25)*0.045) : 1;
-      const spd = T.speed * (ownLand ? 2.4 : 1) * world().speed * climb * (bannerMorale(u)?1.10:1);
+      const moatSlow=u.side<0&&u.x<12 ? Math.max(.48,1-upLvl("moat")*.14) : 1;
+      const spd = T.speed * (ownLand ? 2.4 : 1) * world().speed * climb *
+        (bannerMorale(u)?1.10:1) * moatSlow;
       let moved = 0;
       if(!packed){ moved = spd*dt*u.side; u.x += moved; }
       else if(ff && ff.d < 3.4){ moved = spd*0.25*dt*u.side; u.x += moved; }
@@ -2092,6 +2285,7 @@ function stepFx(dt){
   for(const d of G.dying){ d.t += dt; d.hop = Math.max(0, d.hop - dt*4); }
   G.dying = G.dying.filter(d => d.t < 0.95);
   if(G.balShot){ G.balShot.t += dt; if(G.balShot.t > G.balShot.dur) G.balShot = null; }
+  if(G.mageShot){ G.mageShot.t += dt; if(G.mageShot.t > G.mageShot.dur) G.mageShot = null; }
   for(const sl of G.slashes) sl.t += dt;
   G.slashes = G.slashes.filter(sl => sl.t < 0.14);
   for(const st of G.stuck) st.life -= dt;
@@ -2764,6 +2958,15 @@ function drawKeep(keep, side){
       px(tx-1, GROUND_Y-32, 2, 3, GOB.fireL);
       glow(tx, GROUND_Y-29, 22, "rgba(255,168,60,1)", 0.42);
     }
+    if(upLvl("mageTower")>0){
+      px(cx+24,y+12,14,45,"#5c566f"); px(cx+22,y+9,18,7,"#80749d");
+      px(cx+27,y+2,8,9,"#9a83e0"); px(cx+29,y,4,4,"#d8fbff");
+      glow(cx+31,y+4,18,"rgba(154,131,224,1)",.35);
+    }
+    if(upLvl("moat")>0){
+      ctx.globalAlpha=.72; px(cx+34,GROUND_Y-5,54,7,"#315f70");
+      px(cx+38,GROUND_Y-6,44,2,"#78acb8"); ctx.globalAlpha=1;
+    }
   } else {
     for(const tx of [cx-18, cx+18]){
       const fl = 3 + Math.round(Math.sin(G.wind*8 + tx)*1.2);
@@ -3008,6 +3211,12 @@ function cardRect(i){
   return { x:Math.round(x0 + i*(CW+CARD_GAP)), y:CARD_Y, w:CW, h:CARD_H };
 }
 const SPEED_BTN = {x:W/2-26, y:6, w:52, h:20};
+function spellBtn(i){ return {x:i===0?224:358,y:6,w:58,h:20}; }
+const SPEEDS = [.5,1,2,4];
+function cycleSpeed(){
+  const i=SPEEDS.indexOf(G.speed);
+  G.speed=SPEEDS[(i+1)%SPEEDS.length];
+}
 const GEAR_BTN  = {x:W-34, y:6, w:26, h:20};
 const TITLE_SET  = {x:W-104, y:8, w:92, h:24};
 const TDIFF_L    = {x:W/2-118, y:254, w:22, h:22};
@@ -3028,7 +3237,7 @@ const SETTINGS_ROWS = [
   {key:"sfx",         label:"SOUND",          type:"slider"},
   {key:"shake",       label:"SCREEN SHAKE",   type:"toggle"},
   {key:"dmgNums",     label:"DAMAGE NUMBERS", type:"toggle"},
-  {key:"fastDefault", label:"START AT 2x",    type:"toggle"},
+  {key:"fastDefault", label:"START AT 1x",    type:"toggle"},
   {key:"replayTut",   label:"REPLAY TUTORIAL",type:"action"},
   {key:"replayIntro", label:"REPLAY OPENING", type:"action"},
 ];
@@ -3322,6 +3531,20 @@ function drawHUD(){
   panel(SPEED_BTN.x, SPEED_BTN.y, SPEED_BTN.w, SPEED_BTN.h,
         G.speed>1?"#7a5a2a":P.panel, P.panelD, P.panelL, 2);
   txt(G.speed+"x", SPEED_BTN.x+SPEED_BTN.w/2, SPEED_BTN.y+14, 10, P.cream, "center");
+  const equipped=equippedSpells();
+  for(let i=0;i<2;i++){
+    const r=spellBtn(i),key=equipped[i],S=key&&SPELLS[key],locked=i>=(SAVE.spellSlots||1);
+    const cd=key?(G.spellCd[key]||0):0,ready=S&&cd<=0;
+    panel(r.x,r.y,r.w,r.h,locked?"#27231f":ready?"#493c5a":"#38323c",
+      P.panelD,ready?(S.color||P.goldL):null,2);
+    if(locked) txt("LOCKED",r.x+r.w/2,r.y+14,6,"#625b52","center",false);
+    else if(!S) txt("NO SPELL",r.x+r.w/2,r.y+14,6,"#8a8070","center",false);
+    else {
+      txt(S.name.split(" ")[0].slice(0,9),r.x+r.w/2,r.y+10,6,ready?S.color:"#8a8070","center",false);
+      txt(cd>0?Math.ceil(cd)+"s":"["+String(i+6)+"]",r.x+r.w/2,r.y+18,5,ready?"#efe6cf":"#a09888","center",false);
+      if(cd>0) px(r.x+2,r.y+r.h-2,Math.round((r.w-4)*(1-cd/Math.max(10,S.cd-spellLvl(key)*4))),1,S.color);
+    }
+  }
 
   panel(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h,
         hoverGear?"#5d4630":P.panel, P.panelD, P.panelL, 2);
@@ -3473,6 +3696,13 @@ function drawVerticalKeep(side){
   ctx.globalAlpha=.28; px(W/2-70,y-5,140,8,"#000"); ctx.globalAlpha=1;
   px(W/2-48,y-28,96,26,P.steelD); px(W/2-44,y-25,88,20,"#747d86");
   px(W/2-15,y-35,30,12,light); px(W/2-10,y-31,20,8,c);
+  if(side>0&&upLvl("mageTower")>0){
+    px(W/2+43,y-44,13,38,"#5c566f");px(W/2+41,y-47,17,6,"#80749d");
+    px(W/2+47,y-53,5,8,"#d8fbff");
+  }
+  if(side>0&&upLvl("moat")>0){
+    ctx.globalAlpha=.75;px(W/2-66,y-7,132,6,"#315f70");ctx.globalAlpha=1;
+  }
   const k=side>0?G.keepP:G.keepE;
   capsule(W/2-42,y-43,84,5,k.hp/k.max,side>0?"#66d96e":"#e8574a","#ffffff60");
 }
@@ -3612,6 +3842,12 @@ function drawMapRegions(){
   for(let x=8;x<640;x+=5){
     const y=132+Math.sin(x*.038)*7+Math.sin(x*.091)*3;
     px(x,y,5,3,"#567d72"); if(x%20===8) px(x,y+4,4,1,"#73958a");
+  }
+  if(G.mageShot){
+    const b=G.mageShot,t=Math.min(1,b.t/b.dur);
+    const x=sx(b.x+(b.tx-b.x)*t),y=GROUND_Y+b.y+(b.ty-b.y)*t-Math.sin(t*Math.PI)*34;
+    px(x-3,y-3,7,7,"#9a83e0"); px(x-1,y-1,3,3,"#e8fbff");
+    glow(x,y,24,"rgba(154,131,224,1)",.52);
   }
   for(const [x,y] of [[72,112],[92,143],[296,108],[425,142],[596,115]]){
     px(x-2,y,4,8,"#4e3521"); px(x-8,y-7,16,8,"#45613a");
@@ -3829,11 +4065,15 @@ function warbandClick(p){
 }
 
 const SHOP_BACK = {x:W/2-70, y:332, w:140, h:24};
-const SHOP_TABS = [{id:"army", label:"ARMY & UPGRADES"}];
-function shopTab(i){ return {x:W/2-92+i*184, y:66, w:184, h:22}; }
+const SHOP_TABS = [
+  {id:"army",label:"ARMY"},
+  {id:"spells",label:"SPELLS"},
+  {id:"castle",label:"CASTLE"},
+];
+function shopTab(i){ return {x:W/2-183+i*122, y:66, w:120, h:22}; }
 function shopRows(){
   const rows=[];
-  const y0=88, rh=30;
+  const y0=90, rh=27;
   // The mage is priced at exactly one first clear (120 renown) so it is the
   // reward for finishing battle I; it shipped at 200 and was unreachable
   // until battle II.
@@ -3841,17 +4081,36 @@ function shopRows(){
     {key:"mage",     cost:120, desc:"Blast damage across EVERY lane. Extremely fragile."},
     {key:"outrider", cost:150, desc:"Sprints past the fight and runs at their keep."},
     {key:"sapper",   cost:180, desc:"Nothing in a brawl. Tears walls apart. Escort it."},
+    {key:"ranger",   cost:210, desc:"Elite marksman with range and rapid fire."},
+    {key:"paladin",  cost:260, desc:"A costly holy bulwark for the late campaign."},
   ];
-  for(const f of FOR_SALE)
-    if(!SAVE.unlocked[f.key])
-      rows.push({kind:"unit", key:f.key, name:TYPES[f.key].name, cost:f.cost, desc:f.desc});
-  UPGRADES.forEach(u=>{
-    const l=upLvl(u.key);
-    rows.push({kind:"up", key:u.key, name:u.name, cost:l>=u.max?null:u.cost(l),
-               desc:u.desc(l), lvl:l, max:u.max});
-  });
-  return rows.map((r,i)=>({...r, x:W/2-190, y:y0+i*rh, w:380, h:27,
-                           buy:{x:W/2+110, y:y0+i*rh+3, w:72, h:21}}));
+  if(G.shopTab==="army"){
+    for(const f of FOR_SALE) if(!SAVE.unlocked[f.key])
+      rows.push({kind:"unit",key:f.key,name:TYPES[f.key].name,cost:f.cost,desc:f.desc});
+    UNIT_TRAINING.forEach(u=>{
+      if(!ownedUnits().includes(u.key)) return;
+      const l=unitLvl(u.key),max=2;
+      rows.push({kind:"training",key:u.key,name:u.name,cost:l>=max?null:100+l*90,
+        desc:u.desc,lvl:l,max});
+    });
+  } else if(G.shopTab==="spells"){
+    for(const [key,S] of Object.entries(SPELLS)){
+      const owned=!!(SAVE.unlockedSpells||{})[key],l=spellLvl(key),max=3;
+      rows.push({kind:"spell",key,name:S.name,cost:!owned?S.unlock:l>=max?null:90+l*75,
+        desc:owned?S.desc+"  Level "+l+"/"+max:S.desc,lvl:l,max,owned});
+    }
+    const slots=SAVE.spellSlots||1;
+    rows.push({kind:"slot",key:"spellSlot2",name:"SECOND SPELL SEAL",
+      cost:slots>=2?null:240,desc:"Equip two spells at once.",lvl:slots-1,max:1});
+  } else {
+    UPGRADES.forEach(u=>{
+      const l=upLvl(u.key);
+      rows.push({kind:"up",key:u.key,name:u.name,cost:l>=u.max?null:u.cost(l),
+        desc:u.desc(l),lvl:l,max:u.max});
+    });
+  }
+  return rows.map((r,i)=>({...r,x:W/2-190,y:y0+i*rh,w:380,h:25,
+    buy:{x:W/2+110,y:y0+i*rh+2,w:72,h:21}}));
 }
 function drawShop(){
   px(0,0,W,H,"#2a2118");
@@ -3874,10 +4133,11 @@ function drawShop(){
       ctx.drawImage(S.frames[0], r.x+7, r.y+r.h-3-Math.round(S.h*sc),
                     Math.round(S.w*sc), Math.round(S.h*sc));
     }
-    txt(r.name, r.x+34, r.y+12, 9, owned?"#7fd6bd":"#ffe9a8", "left", false);
+    const equipped=r.kind==="spell"&&(SAVE.spells||[]).includes(r.key);
+    txt((equipped?"◆ ":"")+r.name, r.x+34, r.y+12, 9, owned?"#7fd6bd":"#ffe9a8", "left", false);
     ctx.font='700 7px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
     ctx.fillStyle="#b0a48c"; ctx.fillText(r.desc, r.x+34, r.y+22);
-    if(r.kind==="up"){
+    if(["up","training","spell","slot"].includes(r.kind)){
       for(let i=0;i<r.max;i++)
         px(r.x+r.w-52-r.max*6+i*6, r.y+20, 4, 3, i<r.lvl?"#f5c53f":"#584835");
     }
@@ -3898,6 +4158,13 @@ function shopClick(p){
       tone(560,0.06,"square",0.04); return true; }
   }
   for(const r of shopRows()){
+    if(r.kind==="spell"&&(SAVE.unlockedSpells||{})[r.key]&&inBox(p,r)&&
+       (r.cost===null||!inBox(p,r.buy))){
+      const list=(SAVE.spells||[]).filter(k=>k!==r.key);
+      if(list.length<(SAVE.spellSlots||1)) list.push(r.key);
+      else list[Math.max(0,(SAVE.spellSlots||1)-1)]=r.key;
+      SAVE.spells=list; saveGame(); tone(760,.08,"square",.045,1.4); return true;
+    }
     if(r.cost === null || !inBox(p, r.buy)) continue;
     if(SAVE.renown < r.cost){ tone(130,0.1,"square",0.03,0.6); return true; }
     SAVE.renown -= r.cost;
@@ -3906,8 +4173,26 @@ function shopClick(p){
       const L = SAVE.loadout || [];
       if(L.length < LOADOUT_MAX && L.indexOf(r.key) < 0) L.push(r.key);
       SAVE.loadout = L;
-    }
-    else SAVE.upgrades[r.key] = upLvl(r.key)+1;
+    } else if(r.kind==="spell"){
+      const list=SAVE.spells||[];
+      if(!(SAVE.unlockedSpells||{})[r.key]){
+        SAVE.unlockedSpells=SAVE.unlockedSpells||{}; SAVE.unlockedSpells[r.key]=true;
+        if(list.length<(SAVE.spellSlots||1)) list.push(r.key);
+        else list[Math.max(0,(SAVE.spellSlots||1)-1)]=r.key;
+        SAVE.spells=list; SAVE.spellUpgrades[r.key]=1;
+      } else {
+        SAVE.spellUpgrades[r.key]=spellLvl(r.key)+1;
+        if(!list.includes(r.key)){
+          if(list.length<(SAVE.spellSlots||1)) list.push(r.key);
+          else list[Math.max(0,(SAVE.spellSlots||1)-1)]=r.key;
+          SAVE.spells=list;
+        }
+      }
+    } else if(r.kind==="slot"){
+      SAVE.spellSlots=2;
+    } else if(r.kind==="training"){
+      SAVE.unitUpgrades[r.key]=unitLvl(r.key)+1;
+    } else SAVE.upgrades[r.key] = upLvl(r.key)+1;
     saveGame();
     tone(660,0.1,"square",0.05,1.5); tone(990,0.14,"square",0.04,1.4,0.07);
     return true;
@@ -4079,12 +4364,19 @@ const BEST_ROWS = [
   {t:"knight",   side:1,  who:"YOURS"},
   {t:"archer",   side:1,  who:"YOURS"},
   {t:"mage",     side:1,  who:"YOURS", lock:"mage"},
+  {t:"ranger",   side:1,  who:"YOURS", lock:"ranger"},
+  {t:"paladin",  side:1,  who:"YOURS", lock:"paladin"},
   {t:"spear",    side:-1, who:"HORDE"},
   {t:"knight",   side:-1, who:"HORDE"},
   {t:"archer",   side:-1, who:"HORDE"},
   {t:"runner",   side:-1, who:"HORDE"},
   {t:"shield",   side:-1, who:"HORDE"},
   {t:"bomber",   side:-1, who:"HORDE"},
+  {t:"wolfrider",side:-1, who:"HORDE"},
+  {t:"icetroll", side:-1, who:"HORDE"},
+  {t:"salamander",side:-1,who:"HORDE"},
+  {t:"harpy",    side:-1, who:"HORDE"},
+  {t:"siegeram", side:-1, who:"HORDE"},
   {t:"chieftain",side:-1, who:"HORDE"},
   {t:"overchief",side:-1, who:"BOSS"},
   {t:"frostroc", side:-1, who:"BOSS"},
@@ -4094,12 +4386,14 @@ const BEST_ROWS = [
 ];
 const GOB_NAME = {spear:"SKIRMISHER", knight:"BRUTE", archer:"SHAMAN",
                   runner:"RUNNER", shield:"SHIELD BEARER", bomber:"FIRE BOMBER",
+                  wolfrider:"WOLF RIDER",icetroll:"ICE TROLL",
+                  salamander:"SALAMANDER",harpy:"HARPY",siegeram:"SIEGE RAM",
                   chieftain:"CHIEFTAIN", overchief:"OVERCHIEFTAIN",
                   frostroc:"WHITE TERROR", ashtyrant:"ASH TYRANT",
                   stormroc:"STORM SOVEREIGN", stoneking:"KING UNDER STONE"};
 function bestBox(i){
   const col = i % 6, row = Math.floor(i/6);
-  return {x:8 + col*105, y:82 + row*78, w:98, h:70};
+  return {x:8 + col*105, y:76 + row*61, w:98, h:56};
 }
 function drawBestiary(){
   px(0,0,W,H,"#2a2118");
@@ -4111,24 +4405,24 @@ function drawBestiary(){
     const locked = r.lock && !SAVE.unlocked[r.lock];
     panel(b.x, b.y, b.w, b.h, locked?"#2e281f":"#33261a", P.panelD, P.panelL, 2);
     const S = SPR[r.t][r.side];
-    const sc = Math.min(31/S.w, 44/S.h);
+    const sc = Math.min(27/S.w, 36/S.h);
     ctx.globalAlpha = locked ? 0.25 : 1;
     ctx.drawImage(S.frames[0], b.x+5, b.y+b.h-8-Math.round(S.h*sc),
                   Math.round(S.w*sc), Math.round(S.h*sc));
     ctx.globalAlpha = 1;
     const nm = r.side>0 ? T.name : (GOB_NAME[r.t]||T.name);
-    txt((locked?"???":nm).slice(0,14), b.x+38, b.y+15, 6, locked?"#6a6153":"#ffe9a8", "left", false);
-    ctx.font='700 6px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
+    txt((locked?"???":nm).slice(0,13), b.x+34, b.y+13, 5, locked?"#6a6153":"#ffe9a8", "left", false);
+    ctx.font='700 5px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
     if(locked){
-      ctx.fillStyle="#6a6153"; ctx.fillText("locked", b.x+38, b.y+29);
-      ctx.fillText("quartermaster", b.x+38, b.y+40);
+      ctx.fillStyle="#6a6153"; ctx.fillText("locked", b.x+34, b.y+25);
+      ctx.fillText("quartermaster", b.x+34, b.y+35);
     } else {
       ctx.fillStyle="#b0a48c";
-      ctx.fillText("HP  "+T.hp, b.x+38, b.y+29);
-      ctx.fillText("DMG "+T.dmg, b.x+38, b.y+40);
-      ctx.fillText(T.ranged?"RANGED":"MELEE", b.x+38, b.y+51);
+      ctx.fillText("HP "+T.hp, b.x+34, b.y+25);
+      ctx.fillText("DMG "+T.dmg, b.x+34, b.y+35);
+      ctx.fillText(T.ranged?"RANGED":"MELEE", b.x+34, b.y+45);
       ctx.fillStyle = "#2f7d5e";
-      ctx.fillText(("beats "+(T.beats||"-")).slice(0,15), b.x+38, b.y+62);
+      ctx.fillText(("beats "+(T.beats||"-")).slice(0,14), b.x+34, b.y+54);
       if(r.side>0 && T.cost){
         ctx.drawImage(coinImg, b.x+b.w-34, b.y+6);
         txt(T.cost, b.x+b.w-20, b.y+15, 9, "#ffe9a8", "left", false);
@@ -4270,7 +4564,7 @@ function startBattle(){
   G.started = true;
   reset();
   if(!OPT.tutorialDone) tutStart();      // first ever battle is guided
-  G.speed = OPT.fastDefault ? 2 : 1;
+  G.speed = OPT.fastDefault ? 1 : .5;
   G.overlay = null;
   G.scene = "intro"; G.sceneT = 0;
   tone(392,0.18,"square",0.05,1.5); tone(523,0.26,"square",0.05,1.4,0.12);
@@ -4315,6 +4609,7 @@ cv.addEventListener("mousemove", e=>{
     roster().forEach((k,i)=>{ if(inBox(p,cardRect(i))){ hoverCard=i; hot=true; } });
     if(inBox(p,GEAR_BTN)){ hoverGear=true; hot=true; }
     if(inBox(p,SPEED_BTN)) hot=true;
+    for(let i=0;i<2;i++) if(inBox(p,spellBtn(i))) hot=true;
   }
   cv.style.cursor = hot ? "pointer" : "default";
 });
@@ -4359,7 +4654,10 @@ cv.addEventListener("pointerdown", e=>{
   }
   if(G.scene==="result"){ G.scene="map"; G.sceneT=0; return; }
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; return; }
-  if(inBox(p,SPEED_BTN)){ G.speed = G.speed===1?2:1; return; }
+  for(let i=0;i<2;i++) if(inBox(p,spellBtn(i))){
+    const key=equippedSpells()[i]; if(key) castSpell(key); return;
+  }
+  if(inBox(p,SPEED_BTN)){ cycleSpeed(); return; }
   if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
   if((world().vertical && p.x>120&&p.x<W-120&&p.y>100&&p.y<300) ||
      (!world().vertical && p.y > BAND_TOP-8 && p.y < BAND_BOT+8)){
@@ -4382,12 +4680,13 @@ addEventListener("keydown", e=>{
     G.tut.laneMoved=true; tone(560,0.05,"square",0.03); }
   else if(k==="arrowdown"){ G.lane=stepLane(1); G.laneFlash=1;
     G.tut.laneMoved=true; tone(460,0.05,"square",0.03); }
-  else if(k==="1") tryBuy("spear");
-  else if(k==="2") tryBuy("knight");
-  else if(k==="3") tryBuy("archer");
-  else if(k==="4" && SAVE.unlocked.mage) tryBuy("mage");
+  else if(["1","2","3","4","5"].includes(k)){
+    const pick=roster()[Number(k)-1]; if(pick) tryBuy(pick);
+  }
+  else if(k==="6"){ const s=equippedSpells()[0]; if(s) castSpell(s); }
+  else if(k==="7"){ const s=equippedSpells()[1]; if(s) castSpell(s); }
   else if(k===" " || k==="spacebar") return;
-  else if(k==="s") G.speed = G.speed===1?2:1;
+  else if(k==="s") cycleSpeed();
   else if(k==="m"){
     if(OPT.music>0 || OPT.sfx>0){ OPT._m=OPT.music; OPT._s=OPT.sfx; OPT.music=0; OPT.sfx=0; }
     else { OPT.music=OPT._m??0.7; OPT.sfx=OPT._s??0.8; }
@@ -4449,7 +4748,7 @@ function step(now){
     if(G.hitstop > 0){ G.hitstop -= dt; }
     else if(G.scene==="opening"){ openingTick(dt); }
     else if(G.scene==="title"){ /* home is a place, not a live match */ }
-    else if(G.scene==="play"){ tutStep(dt); for(let i=0;i<G.speed;i++) update(dt); }
+    else if(G.scene==="play"){ tutStep(dt*G.speed); update(dt*G.speed); }
     else if(G.scene==="result"){ stepFx(dt); }
   }
   render();
@@ -4461,10 +4760,21 @@ bakeAll(); bakeCoin(); bakeGear(); buildScenery(); fit();
 if(!OPT.introSeen){ G.scene = "opening"; G.sceneT = 0; G.beat = 0; }
 // Local-only level shortcut for visual checks: ?battle=3 opens that briefing.
 if(location.hostname==="127.0.0.1" || location.hostname==="localhost"){
-  const previewBattle=Number(new URLSearchParams(location.search).get("battle"));
+  const previewParams=new URLSearchParams(location.search);
+  const previewSpell=previewParams.get("spell");
+  if(SPELLS[previewSpell]){
+    SAVE.unlockedSpells[previewSpell]=true; SAVE.spellUpgrades[previewSpell]=1;
+    SAVE.spells=[previewSpell];
+  }
+  const previewBattle=Number(previewParams.get("battle"));
   if(previewBattle>=1 && previewBattle<=BATTLES.length){
     G.battle=previewBattle; reset(); G.scene="intro"; G.sceneT=0;
     G.tut.on=false;
+  }
+  const previewScene=previewParams.get("scene");
+  if(["map","shop","bestiary","warband"].includes(previewScene)){
+    G.scene=previewScene; G.sceneT=0;
+    if(previewScene==="shop") G.shopTab=previewParams.get("tab")||"army";
   }
 }
 requestAnimationFrame(frame);
@@ -4478,7 +4788,8 @@ window.__bannerline = {
   setTerrK(v){ TERR_K = v; }, getTerrK(){ return TERR_K; },
   setDiff(v){ OPT.difficulty = v; }, getDiff(){ return DIFF[OPT.difficulty].name; },
   tutStart, tutStep, tutFinish, TUT,
-  SAVE, saveGame, wipeSave, UPGRADES, roster, BATTLES, ownedUnits, LOADOUT_MAX,
+  SAVE, saveGame, wipeSave, UPGRADES, SPELLS, UNIT_TRAINING, roster, BATTLES,
+  ownedUnits, LOADOUT_MAX, castSpell, cycleSpeed,
   sim(seconds, policy){
     reset();
     const dt = 1/30;

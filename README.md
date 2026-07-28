@@ -116,7 +116,7 @@ The first ever battle is guided — nine steps that gate on what you actually do
 
 ## The campaign map, the store and the save
 
-A parchment **campaign map** with twelve nodes shows what's cleared, what's next
+A parchment **campaign map** with twenty nodes shows what's cleared, what's next
 and what's locked; progress, renown and unlocks persist to `localStorage`
 automatically.
 
@@ -132,6 +132,34 @@ Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it wit
 | Reinforced Walls — 3 levels | +90 keep HP each |
 | Deeper Coffers — 3 levels | +9% gold income each |
 | Standing Army — 2 levels | +9 starting gold each |
+
+The Quartermaster now has separate **Army**, **Spells**, and **Castle** ledgers.
+The Army adds the elite Ranger and Paladin, plus two training levels for
+Spearmen, Knights, Archers, and Mages. Training adds a visible battlefield
+behavior: brace, shield wall, volley, or arcane surge. Castle construction adds
+a visible slowing moat and an area-firing mage tower alongside the existing
+walls, ballista, oil, coffers, and muster upgrades.
+
+## Spells
+
+Spells are unlocked and upgraded with renown. You begin with one command seal;
+a second spell slot is a major store unlock, and two is the permanent maximum.
+Both spells target the currently selected lane and recharge during battle:
+
+- **Firestorm** burns every enemy in the lane.
+- **Arrow Rain** delivers a concentrated volley.
+- **Reinforce** calls free defenders into the lane.
+- **Healing Light** restores and briefly guards friendly troops.
+
+Keys `6` and `7` cast the equipped spells. Clicking an owned spell in the store
+equips it; upgrading an unequipped spell equips it automatically.
+
+## Expanding enemy roster
+
+Each region introduces a signature enemy, while later worlds freely reuse
+everything already encountered: Wolf Riders in the Green Marches, Ice Trolls
+in the Frostreach, Salamanders in the Ember Waste, Harpies on the Skyward
+Steps, and Siege Rams in the Crown Range.
 
 The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely,
 which is only meaningful *because* everything else no longer does. It costs
@@ -158,7 +186,10 @@ source so it can return later as an expensive, mortal warband unit.
 
 ## Settings
 
-Reachable from the title screen or the in-game gear icon (`Esc` / `P`). All options persist to `localStorage`:
+Reachable from the title screen or the in-game gear icon (`Esc` / `P`). All options persist to `localStorage`.
+
+Battle speed cycles through **0.5x, 1x, 2x, and 4x**. New battles begin at
+0.5x by default; the fast-start option begins them at 1x.
 
 - **Difficulty** — Recruit / Soldier / Veteran / Warlord
 - **Music** and **Sound** volumes, on independent audio buses (0–100%)
@@ -269,8 +300,9 @@ python -m http.server 5784
 
 The current prototype includes a persistent twenty-battle campaign across five
 worlds, dedicated world bosses, eight level-specific battlefield mechanics, an
-expanded enemy roster, a campaign map,
-warband selection, a bestiary, unlockable units, upgrades, four difficulty
+expanded regional enemy roster, two-slot spell loadouts, visible castle
+construction, a campaign map, warband selection, a bestiary, unlockable units,
+training upgrades, four difficulty
 tiers, and desktop and landscape-mobile controls.
 
 The next development phase should focus on maintainability and confidence:
