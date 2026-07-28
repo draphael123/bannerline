@@ -90,7 +90,7 @@ const UPGRADES = [
     desc:l=>"+45 starting gold  (now "+(60+l*45)+")" },
 ];
 function upLvl(k){ return SAVE.upgrades[k] || 0; }
-function keepMaxHp(){ return 400 + upLvl("keepHp")*90; }
+function keepMaxHp(){ return 520 + upLvl("keepHp")*90; }
 function incomeMul(){ return 1 + upLvl("income")*0.09; }
 function startGold(){ return 60 + upLvl("muster")*45; }
 
@@ -565,6 +565,48 @@ function artGobShaman(c, K, frame){
 
 // The battle-3 champion. Deliberately built from the brute's language at a
 // larger scale with gold trim, so it reads as "that one, but worse".
+// Battle II's champion. Between a brute and the Warchief: bone crown, twin
+// axes, no gold. Reads as "the Warchief's smaller cousin".
+function artChieftain(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  c.save(); c.translate(0, 5);
+  R(c, 9, 33+g[0], 8, 12-g[0], GOB.skinD); R(c, 19, 33+g[1], 8, 12-g[1], GOB.skinD);
+  R(c, 9, 33+g[0], 3, 12-g[0], GOB.skin);
+  R(c, 8, 43+g[0], 10, 3, GOB.ragD);       R(c, 18, 43+g[1], 10, 3, GOB.ragD);
+  // torso
+  R(c, 5, 13+B, 26, 22, GOB.skin);
+  R(c, 5, 13+B, 26, 3, GOB.skinL);
+  R(c, 5, 16+B, 3, 19, GOB.skinL);
+  R(c, 28, 16+B, 3, 19, GOB.skinD);
+  R(c, 5, 30+B, 26, 5, GOB.rag);
+  R(c, 5, 30+B, 26, 1, GOB.ragL);
+  R(c, 10, 18+B, 9, 9, GOB.skinD);
+  R(c, 12, 15+B, 3, 16, GOB.boneD);        // rib harness
+  R(c, 21, 15+B, 3, 16, GOB.boneD);
+  // shoulders
+  R(c, 2, 12+B, 8, 10, GOB.skinD);
+  R(c, 3, 13+B, 5, 3, GOB.skinL);
+  R(c, 26, 12+B, 8, 10, GOB.skinD);
+  // head + bone crown
+  R(c, 12, 3+B, 13, 11, GOB.skin);
+  R(c, 12, 3+B, 13, 2, GOB.skinL);
+  R(c, 12, 12+B, 13, 2, GOB.skinD);
+  for(let i=0;i<4;i++) R(c, 12+i*4, -2+B, 3, 6, GOB.bone);
+  R(c, 12, 1+B, 13, 3, GOB.boneD);
+  R(c, 19, 6+B, 4, 4, "#ff5a3a"); R(c, 14, 6+B, 4, 4, "#ff5a3a");
+  R(c, 15, 11+B, 3, 4, GOB.bone); R(c, 21, 11+B, 3, 4, GOB.bone);
+  // twin axes
+  const ax = atk ? 30 : 32;
+  R(c, ax, 12+B, 4, 20, P.wood);
+  R(c, ax-4, 5+B, 11, 10, "#9aa5b0");
+  R(c, ax-2, 7+B, 7, 6, "#7f8a95");
+  R(c, 0, 18+B, 4, 18, P.wood);
+  R(c, -2, 13+B, 9, 8, "#9aa5b0");
+  R(c, 0, 15+B, 5, 4, "#7f8a95");
+  c.restore();
+}
+
 function artWarchief(c, K, frame){
   const atk = frame===4, g = GAIT[atk?0:frame];
   const B = atk ? 0 : g[2];
@@ -621,17 +663,17 @@ const UNIT_ART = {
   "1":  { spear:artSpear,     knight:artKnight,    archer:artArcher,
           mage:artMage,       captain:artCaptain  },
   "-1": { spear:artGobSpear,  knight:artGobBrute,  archer:artGobShaman,
-          warchief:artWarchief },
+          warchief:artWarchief, chieftain:artChieftain },
 };
 const UNIT_BOX = {
   "1":  { spear:{w:30,h:40}, knight:{w:27,h:47}, archer:{w:26,h:40},
           mage:{w:32,h:44},  captain:{w:34,h:56} },
   "-1": { spear:{w:30,h:38}, knight:{w:36,h:47}, archer:{w:30,h:48},
-          warchief:{w:48,h:62} },
+          warchief:{w:48,h:62}, chieftain:{w:42,h:54} },
 };
 const SPR = {};                               // SPR[type][side][frame] / .flash
 function bakeUnits(){
-  for(const type of ROSTER_ALL.concat(['warchief','captain'])){
+  for(const type of ROSTER_ALL.concat(['warchief','chieftain','captain'])){
     SPR[type] = {};
     for(const side of [1,-1]){
       const K = colsFor(side), art = UNIT_ART[side][type], box = UNIT_BOX[side][type];
@@ -890,6 +932,13 @@ const TYPES = {
     hero:true, ability:"RALLY", abilityCd:26, respawn:18,
     beats:"DESPAIR", hint:"Holds a lane. Rallies the line.",
   },
+  chieftain: {
+    key:"chieftain", name:"CHIEFTAIN", cost:0, hp:500, speed:2.9,
+    reach:3.2, dmg:20, rate:1.4, cls:"heavy",
+    cleave:3.0, cleaveMult:0.35, armor:{ arrow:0.6 },
+    boss:true, laneSpill:1, bigTarget:true,
+    beats:"THE SCATTERED", hint:"Spears, massed in one lane",
+  },
   warchief: {
     key:"warchief", name:"WARCHIEF", cost:0, hp:1050, speed:2.6,
     reach:3.4, dmg:26, rate:1.45, cls:"heavy",
@@ -917,9 +966,11 @@ function roster(){
 const BATTLES = [
   { name:"HOLD THE CROSSING", atmo:0, blocked:[],     boss:null,
     brief:"They came for the ford. Break their camp." },
-  { name:"THE NARROWS",       atmo:1, blocked:[0,4],  boss:null,
-    brief:"Marsh closes both flanks. Three lanes only \u2014 you cannot spread." },
-  { name:"THE WARCHIEF",      atmo:2, blocked:[],     boss:{at:30, hpTrigger:0.62},
+  { name:"THE NARROWS",       atmo:1, blocked:[0,4],
+    boss:{at:40, hpTrigger:0.45, type:"chieftain"},
+    brief:"Marsh closes both flanks. Three lanes only \u2014 and their chieftain waits." },
+  { name:"THE WARCHIEF",      atmo:2, blocked:[],
+    boss:{at:30, hpTrigger:0.62, type:"warchief"},
     brief:"Their champion walks at you. Spears bring down armour." },
 ];
 
@@ -979,7 +1030,7 @@ function reset(){
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
   G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
   const kh = keepMaxHp();
-  G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:400,max:400,x:104,ruin:0};
+  G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:520,max:520,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false;
   G.hero=null; G.heroCd=0; G.heroDead=0; G.rallyFx=0;
@@ -1244,9 +1295,16 @@ function bannersHeld(side){
 // split) is always exactly 1.0 — tune the slope without moving parity.
 let TERR_K = 0.04;
 function goldRate(side){
-  const base = 22 + Math.min(1, G.t/150) * 26;
+  // slowed ~20% so there is room to steer a hero and time an ability
+  const base = 18 + Math.min(1, G.t/150) * 21;
   const terr = 1 - 3*TERR_K + TERR_K * bannersHeld(side);
-  return base * terr * (side < 0 ? diff().income * enemyOpening() : incomeMul());
+  // A hero is a free, permanent, respawning body you can steer to whichever
+  // lane is losing. Stat nerfs, bosses and AI counter-buying each moved the
+  // win rate only a little, because none of them price THAT. So the horde
+  // musters harder when a champion rides against them - one lever that
+  // actually scales with the thing causing the problem.
+  const vsHero = (side < 0 && SAVE.hero) ? 1.18 : 1;
+  return base * terr * vsHero * (side < 0 ? diff().income * enemyOpening() : incomeMul());
 }
 
 // Which lane the AI reinforces. At laneIQ 2 it reads the field: shore up the
@@ -1284,15 +1342,18 @@ function enemyBrain(dt){
   if(G.eBrainCd > 0) return;
   const D = diff();
   G.eBrainCd = D.cd + Math.random()*D.cd*0.8;
-  let ps=0, pk=0, pa=0;
+  let ps=0, pk=0, pa=0, heroOut=false;
   for(const u of G.units){ if(u.dead||u.side!==1) continue;
+    if(u.heroCtl){ heroOut = true; continue; }
     if(u.type==="spear") ps++; else if(u.type==="knight") pk++; else pa++; }
   // Pick the counter FIRST, then decide affordability. The old chain fell
   // through to a random cheap buy whenever the counter was unaffordable, so
   // the AI could never bank for a 60g Knight — it kept dribbling gold into
   // 30g Spears, which is precisely what an archer line wants to be fed.
   let want, commit = false;
-  if(pk >= D.counterAt){ want = "spear"; }
+  // a hero is heavy armour walking at you: answer it with braced spears
+  if(heroOut && D.laneIQ >= 1 && Math.random() < 0.55){ want = "spear"; }
+  else if(pk >= D.counterAt){ want = "spear"; }
   else if(pa >= D.counterAt){ want = "knight"; commit = true; }
   else if(ps >= D.counterAt*2){ want = "archer"; commit = true; }
   else { const r = Math.random(); want = r<0.55 ? "spear" : r<0.85 ? "knight" : "archer"; }
@@ -1411,9 +1472,9 @@ function update(dt){
   const bossDue = bs && (G.t >= bs.at || G.keepE.hp/G.keepE.max <= bs.hpTrigger);
   if(bs && !G.bossOut && bossDue && !G.tut.on){
     G.bossOut = true;
-    const b = spawn('warchief', -1, 2);
+    const b = spawn(bs.type || 'warchief', -1, 2);
     G.shake = 7; G.flash = 0.5;
-    G.toast = 'THE WARCHIEF COMES'; G.toastT = 2.6;
+    G.toast = (TYPES[bs.type||'warchief'].name) + ' COMES'; G.toastT = 2.6;
     thud(0.5, 0.1, 200);
   }
 
@@ -2866,9 +2927,11 @@ const BEST_ROWS = [
   {t:"spear",    side:-1, who:"HORDE"},
   {t:"knight",   side:-1, who:"HORDE"},
   {t:"archer",   side:-1, who:"HORDE"},
+  {t:"chieftain",side:-1, who:"HORDE"},
   {t:"warchief", side:-1, who:"HORDE"},
 ];
-const GOB_NAME = {spear:"SKIRMISHER", knight:"BRUTE", archer:"SHAMAN", warchief:"WARCHIEF"};
+const GOB_NAME = {spear:"SKIRMISHER", knight:"BRUTE", archer:"SHAMAN",
+                  chieftain:"CHIEFTAIN", warchief:"WARCHIEF"};
 function bestBox(i){
   const col = i % 4, row = Math.floor(i/4);
   return {x:22 + col*152, y:98 + row*106, w:142, h:94};

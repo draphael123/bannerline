@@ -49,6 +49,8 @@ Three battles, each with its own **rules** rather than just a bigger wave:
 | II | The Narrows | Marsh closes both outer lanes — three lanes only, you cannot spread. Dusk. |
 | III | The Warchief | A 1050 HP champion walks in partway through. Storm. |
 
+**Every battle after the first has a boss** — they double as the horde's champions. Battle II fields the **Chieftain** (500 HP, twin axes); battle III the **Warchief** (1050 HP). Both are `heavy`, so massed spears bring them down.
+
 ⚠️ The Warchief shipped with **no working weakness**. Spears are its designed counter (3.2× vs heavy), but its 6.0-wide cleave farmed the single-file lane queue while only the front unit could hit back — the exact bug I had already fixed for the Knight, reintroduced at double the radius. Worse, it had `laneSpill:1` while melee has 0, so it attacked three lanes while only one could attack it: 300g of spears one lane over did **literally zero damage**. Fixed with a `bigTarget` flag (large units are reachable from neighbouring lanes), cleave cut to 3.2/0.35, and 1050 HP. Now 300g of spears kills it in ~16s with survivors, while the same gold in knights, archers or mages all fail.
 
 The Warchief triggers on **time or a last stand** (their keep dropping below 62%), whichever comes first — on a purely timed trigger a fast win meant you never met it. It's `heavy` class, so spears bring it down: the boss teaches the triangle rather than bypassing it.
@@ -121,7 +123,11 @@ Once you buy one from the **Heroes** tab of the store, a hero marches in every b
 
 The first hero is the **Standard-Bearer**: tanky, modest damage, and RALLY hastens and strengthens the troops around him. It's deliberately an *anchor* rather than a carry — a duelist hero would turn your army into an escort, which is the failure mode worth avoiding.
 
-⚠️ **Known imbalance.** The hero swings the hardest tier from 53% to 88%. Stat nerfs don't close it — the power is in being a permanent free body that respawns and can plug any lane, not in its numbers. The correct fix is an enemy champion at the top tiers to answer it, which isn't built yet.
+**Pricing the hero.** A free permanent respawning body you can steer to the losing lane is worth a lot, and four separate levers barely touched it: three rounds of stat nerfs, adding bosses, and teaching the AI to counter-buy spears (heroes are `heavy`, which skirmishers already punish 3.2×). Bosses in particular made hero-less play *harder* without touching the hero — the hero counters bosses, not the reverse.
+
+What finally scaled with the problem was pricing it directly: **the horde musters ~18% harder when a champion rides against them.**
+
+⚠️ The hero is still an advantage at the top tiers, and the exact multiplier is tuned on a crude bot that uses a hero far worse than a person would. This one needs a playtest, not more simulation.
 
 ## Settings
 
