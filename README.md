@@ -41,7 +41,9 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 ## The campaign
 
-**Three worlds, three battles each.** A world has its own palette and its own standing rule; a level inside it varies by objective, terrain and who the horde fields.
+**Three worlds, four battles each.** A world has its own palette and its own
+standing rule; its fourth battle is a dedicated boss encounter with no enemy
+keep. Boss battles use normal unit deployment and end when the boss dies.
 
 | World | Rule you can see | Terrain |
 |---|---|---|
@@ -97,7 +99,9 @@ The first ever battle is guided — nine steps that gate on what you actually do
 
 ## The campaign map, the store and the save
 
-A parchment **campaign map** with three nodes shows what's cleared, what's next and what's locked; progress, renown and unlocks persist to `localStorage` automatically.
+A parchment **campaign map** with twelve nodes shows what's cleared, what's next
+and what's locked; progress, renown and unlocks persist to `localStorage`
+automatically.
 
 Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it with **The Quartermaster**, reached from the map:
 
@@ -182,7 +186,7 @@ Two **factions**, not a palette swap: blue-and-steel humans versus a green gobli
 
 ## The campaign curve
 
-Each level carries a `pressure` scalar that sits *underneath* the global difficulty tier, so level 9 is harder than level 1 whichever tier you picked. And the horde scales with your **empire** — `hordeResponse()` counts your hero, your unlocked units and every upgrade level, and musters accordingly.
+Each level carries a `pressure` scalar that sits *underneath* the global difficulty tier, so later levels are harder than earlier ones whichever tier you picked. And the horde scales with your **empire** — `hordeResponse()` counts your hero, your unlocked units and every upgrade level, and musters accordingly.
 
 ⚠️ Both of those exist because measurement found the opposite of what I'd assumed:
 
@@ -237,8 +241,16 @@ python -m http.server 5784
 
 ## Status
 
-v0.5. Three battles, three units, four difficulty tiers, plays on a phone. Combat, pacing, presentation and player agency are settled — lane choice closed the "no placement" gap, and the atmosphere system is already campaign-shaped (each battle draws the next sky).
+The current prototype includes a persistent twelve-battle campaign across three
+worlds, a campaign map, warband selection, a bestiary, unlockable units,
+upgrades, heroes, four difficulty tiers, and desktop and landscape-mobile
+controls.
 
-Queued next: a proper save system (campaign progress currently only advances within a session), a richer intro, and a unit viewer / bestiary.
+The next development phase should focus on maintainability and confidence:
 
-Known rough edges: the unit sprites are improved but not exceptional and would benefit from real pixel-art iteration; there's no campaign map screen yet, so battles advance by restarting rather than through a chosen node.
+- split the single-file source into focused game, rendering, UI, and data
+  modules without changing gameplay;
+- turn the existing balance harness into repeatable automated checks;
+- add browser smoke tests for the title, campaign, shop, warband, battle, and
+  save/load flows;
+- playtest hero balance and iterate on the pixel art with human feedback.

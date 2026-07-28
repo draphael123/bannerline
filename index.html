@@ -14,7 +14,7 @@
 <script>
 "use strict";
 //////////////////////////////////////////////////////////////////////////////
-// BANNERLINE — a lane pusher. One battle. Three units. One front line.
+// BANNERLINE — a campaign-scale lane pusher. One moving front line.
 //
 // Renderer note: every sprite is BAKED ONCE at boot into an offscreen canvas
 // with a dark outline burned in (see bake()). Nothing draws raw rects at
@@ -68,17 +68,27 @@ try{
 }catch(e){}
 // Campaign save, separate from display options so wiping settings doesn't
 // wipe progress. Must be declared before reset() reads it at boot.
-const SAVE = { progress:1, renown:0, unlocked:{}, upgrades:{}, won:false, hero:null,
-               loadout:["spear","knight","archer"] };
+const SAVE = { campaignVersion:2, progress:1, renown:0, unlocked:{}, upgrades:{},
+               won:false, hero:null, loadout:["spear","knight","archer"] };
 try{
   const raw = localStorage.getItem("bannerline.save");
-  if(raw) Object.assign(SAVE, JSON.parse(raw));
+  if(raw){
+    const loaded = JSON.parse(raw);
+    // v2 inserts a dedicated boss battle after every three-stage world.
+    // Preserve which original battle an existing save had reached.
+    if(!loaded.campaignVersion){
+      const p = loaded.progress || 1;
+      loaded.progress = p >= 10 ? 13 : p >= 7 ? p+2 : p >= 4 ? p+1 : p;
+      loaded.campaignVersion = 2;
+    }
+    Object.assign(SAVE, loaded);
+  }
 }catch(e){}
 function saveGame(){
   try{ localStorage.setItem("bannerline.save", JSON.stringify(SAVE)); }catch(e){}
 }
 function wipeSave(){
-  SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
+  SAVE.campaignVersion=2; SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
   SAVE.hero=null; SAVE.loadout=["spear","knight","archer"];
   saveGame();
 }
@@ -90,7 +100,7 @@ const UPGRADES = [
     desc:l=>l===0 ? "burn whatever reaches your gate"
                   : (l*7)+" damage/s at the gate" },
   { key:"keepHp", name:"REINFORCED WALLS", max:3, cost:l=>110+l*70,
-    desc:l=>"+90 keep HP  (now "+(400+l*90)+")" },
+    desc:l=>"+90 keep HP  (now "+(520+l*90)+")" },
   { key:"income", name:"DEEPER COFFERS",   max:3, cost:l=>130+l*80,
     desc:l=>"+9% gold income  (now +"+(l*9)+"%)" },
   { key:"muster", name:"STANDING ARMY",    max:2, cost:l=>90+l*70,
@@ -1091,9 +1101,13 @@ const BATTLES = [
   { world:0, name:"THE NARROWS", pressure:0.95, atmo:1, blocked:[0,4],
     boss:{at:40, hpTrigger:0.45, type:"chieftain"}, objective:{type:"raze"},
     brief:"Marsh closes both flanks. Three lanes only \u2014 and their chieftain waits." },
-  { world:0, name:"THE WARCHIEF", pressure:1.03, atmo:2, blocked:[],
-    boss:{at:30, hpTrigger:0.62, type:"warchief"}, objective:{type:"raze"},
-    brief:"Their champion walks at you. Spears bring down armour." },
+  { world:0, name:"THE MUSTERING", pressure:1.03, atmo:2, blocked:[],
+    boss:null, comp:"heavy", objective:{type:"raze"},
+    brief:"The Overchieftain's guard is gathering. Break its camp." },
+  { world:0, name:"THE OVERCHIEFTAIN", pressure:1.10, atmo:2, blocked:[],
+    boss:{at:0, hpTrigger:1, type:"warchief"}, comp:"heavy",
+    objective:{type:"boss"},
+    brief:"No walls. No retreat. Kill the Overchieftain." },
   // --- II. THE FROSTREACH ---------------------------------------------
   { world:1, name:"THE WHITE MARCH", pressure:1.00, atmo:3, blocked:[], boss:null,
     comp:"swarm", objective:{type:"raze"},
@@ -1105,6 +1119,10 @@ const BATTLES = [
     boss:{at:34, hpTrigger:0.5, type:"chieftain"}, comp:"heavy",
     objective:{type:"raze"},
     brief:"Their chieftain has wintered here. He is bigger for it." },
+  { world:1, name:"THE WHITE TERROR", pressure:1.24, atmo:3, blocked:[],
+    boss:{at:0, hpTrigger:1, type:"warchief"}, comp:"swarm",
+    objective:{type:"boss"},
+    brief:"The sky darkens. Bring down the terror above the ice." },
   // --- III. THE EMBER WASTE -------------------------------------------
   // no blocked lanes here: the geysers ARE this level's terrain, and they
   // sit in lanes 1 and 3 - closing those made them unable to hit anything
@@ -1120,6 +1138,10 @@ const BATTLES = [
     boss:{at:26, hpTrigger:0.7, type:"warchief"}, comp:"heavy",
     objective:{type:"raze"},
     brief:"The last of them. Kill the Warchief's host and be done." },
+  { world:2, name:"THE ASH TYRANT", pressure:1.46, atmo:4, blocked:[],
+    boss:{at:0, hpTrigger:1, type:"warchief"}, comp:"ranged",
+    objective:{type:"boss"},
+    brief:"The final tyrant waits in the fire. Kill it." },
 ];
 
 // Difficulty scales the AI's GENERALSHIP and purse, never unit stats — you
@@ -1179,7 +1201,8 @@ function reset(){
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
   G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
   const kh = Math.round(keepMaxHp() * (battle().keepMul || 1));
-  const ek = (battle().objective||{}).type === "survive" ? 99999 : 520;
+  const objectiveType = (battle().objective||{}).type;
+  const ek = objectiveType === "survive" || objectiveType === "boss" ? 99999 : 520;
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false; G.holdT=0;
@@ -1607,7 +1630,8 @@ function update(dt){
 
     const tgt = nearestEnemy(u);
     const keep = u.side>0 ? G.keepE : G.keepP;
-    const keepDist = Math.abs(keep.x - u.x);
+    const keepDist = u.side > 0 && (battle().objective||{}).type === "boss"
+      ? Infinity : Math.abs(keep.x - u.x);
     const keepReach = Math.min(T.reach, 9) + 2;
 
     // Ranged units HOLD at their firing range - they stop advancing once a
@@ -1752,6 +1776,10 @@ function update(dt){
     else if(G.timeLeft <= 0) endGame("DEFEAT", "Time. You never held it.");
   } else if(obj.type === "survive"){
     if(G.t >= obj.seconds) endGame("VICTORY", "You held the line.");
+  } else if(obj.type === "boss"){
+    const bossAlive = G.units.some(u => u.side < 0 && u.T.boss);
+    if(G.bossOut && !bossAlive) endGame("VICTORY", "The tyrant is dead.");
+    else if(G.timeLeft <= 0) endGame("DEFEAT", "The boss still stands.");
   } else {
     if(G.keepE.hp <= 0) endGame("VICTORY", "Their keep is rubble.");
     else if(G.timeLeft <= 0){
@@ -3005,7 +3033,8 @@ function drawBattlefield(){
   if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
   drawSky(); drawBirds(); drawWater(); drawFarBank();
   drawTerritory(); drawLanes(); drawBanners();
-  drawKeep(G.keepP, 1); drawKeep(G.keepE, -1);
+  drawKeep(G.keepP, 1);
+  if((battle().objective||{}).type !== "boss") drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
   // depth-sort the living and the dying together so falling bodies stay in rank
   const cast = G.units.map(u=>({y:u.y, u})).concat(G.dying.map(d=>({y:d.y, d})));
@@ -3047,12 +3076,12 @@ function drawBattlefield(){
 //////////////////////////////////////////////////////////////////////////////
 // CAMPAIGN MAP + STORE
 //////////////////////////////////////////////////////////////////////////////
-// three worlds, three battles each — a row per world
+// three worlds, four battles each — a row per world
 function mapNode(i){
-  const w = Math.floor(i/3), c = i%3;
-  return { x:150 + c*170, y:118 + w*66 };
+  const w = Math.floor(i/4), c = i%4;
+  return { x:135 + c*125, y:118 + w*66 };
 }
-const MAP_NODES = { length:9 };
+const MAP_NODES = { length:12 };
 const MAP_SHOP  = {x:W/2-158, y:322, w:150, h:24};
 const MAP_WARB  = {x:W/2+8,   y:322, w:150, h:24};
 const MAP_BACK  = {x:12, y:8, w:74, h:22};
@@ -3114,8 +3143,8 @@ function drawMap(){
   txt(SAVE.renown+"  renown", W/2+8, 76, 10, "#e8dcc0", "center");
 
   // route within each world
-  for(let i=0;i<9;i++){
-    if(i%3===2) continue;
+  for(let i=0;i<BATTLES.length;i++){
+    if(i%4===3) continue;
     const a=mapNode(i), b=mapNode(i+1), done=SAVE.progress>i+1;
     for(let t=0;t<1;t+=0.06){
       const x=a.x+(b.x-a.x)*t, y=a.y+(b.y-a.y)*t;
@@ -3123,7 +3152,7 @@ function drawMap(){
     }
   }
   for(let wi=0; wi<3; wi++){
-    const first = wi*3;
+    const first = wi*4;
     const unlocked = SAVE.progress > first;
     const n0 = mapNode(first);
     txt(WORLDS[wi].short, 26, n0.y+3, 8,
@@ -3132,7 +3161,7 @@ function drawMap(){
     ctx.font='7px "Courier New",monospace'; ctx.textAlign="left";
     ctx.fillStyle="#8a7e66"; ctx.fillText(WORLDS[wi].rule.slice(0,44), 26, n0.y+14);
   }
-  for(let i=0;i<9;i++){
+  for(let i=0;i<BATTLES.length;i++){
     const bn=i+1, done=SAVE.progress>bn, cur=SAVE.progress===bn, locked=SAVE.progress<bn;
     const b=nodeBox(i), n=mapNode(i);
     if(cur){ ctx.globalAlpha=0.6+Math.sin(G.wind*4)*0.4;
@@ -3144,7 +3173,7 @@ function drawMap(){
     if(!locked){
       const o = BATTLES[i].objective.type;
       txt(BATTLES[i].name.slice(0,15), n.x, n.y+32, 6, "#d8cdb4", "center", false);
-      if(o!=="raze") txt(o.toUpperCase(), n.x, n.y+40, 6, "#9fd6bd", "center", false);
+      if(o!=="raze") txt(o==="boss"?"SLAY":o.toUpperCase(), n.x, n.y+40, 6, "#9fd6bd", "center", false);
     }
   }
   mbtn({...MAP_SHOP, label:"QUARTERMASTER"}, hoverMenu==="SHOP");
@@ -3589,6 +3618,7 @@ function drawIntro(){
   // what this level actually asks of you
   const goal = ob.type==="hold"    ? "HOLD "+ob.count+" FLAGS FOR "+ob.seconds+"s"
              : ob.type==="survive" ? "SURVIVE "+ob.seconds+" SECONDS"
+             : ob.type==="boss"    ? "SLAY THE BOSS"
              :                       "RAZE THEIR KEEP";
   ribbon(W/2-92+ox, 200, 184, 17, "#3d4a56", "#232d36", "#5d6b78");
   txt(goal, W/2+ox, 212, 9, "#a8ffd8", "center");
