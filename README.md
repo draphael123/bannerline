@@ -48,7 +48,7 @@ and fight 10% faster. Animated coins make the continuing income visible.
 
 ## The campaign
 
-**Three worlds, four battles each.** A world has its own palette and its own
+**Five worlds, four battles each.** A world has its own palette and its own
 standing rule; its fourth battle is a dedicated boss encounter with no enemy
 keep. Boss battles use normal unit deployment and end when the boss dies.
 
@@ -57,6 +57,8 @@ keep. Boss battles use normal unit deployment and end when the boss dies.
 | **The Green Marches** | Open country — the baseline. | — |
 | **The Frostreach** | **Black ice.** Soldiers carry their momentum and slide past where they meant to stop, so lines overshoot into each other. | A frozen lake across the middle third, where they slide further still. |
 | **The Ember Waste** | **Both keeps burn** at 2.8 HP/s. Neither side can afford to wait. | Two geysers that erupt every 6s with a ~1.3s telegraph, for 46 damage to whoever is standing in that lane. |
+| **The Skyward Steps** | **Vertical ascent.** The field turns bottom-to-top, with deployment columns replacing horizontal lanes. | Mountain stairs, high cloud, and updrafts that throw units into another column. |
+| **The Crown Range** | **Elevation.** Each terrace slows the climb toward the enemy. | Siege gates, avalanche warnings, and a fortified summit. |
 
 ⚠️ The first version of these rules was *18% slower movement* and *24% faster gold*. Both were real and both were completely invisible in play — a world you can't perceive is a palette. Measured: on ice a unit now overshoots its stopping point by **10.6** world units against **6.8** on open ground.
 
@@ -170,7 +172,7 @@ The pause menu offers Resume / Settings / Restart / Quit to title.
 
 Two **factions**, not a palette swap: blue-and-steel humans versus a green
 goblin horde. The expanded horde adds distinct runner, shield-bearer and bomber
-silhouettes, plus three oversized world bosses. Battlefields now carry
+silhouettes, plus five oversized world bosses. Battlefields now carry
 world-specific structures—war camps, ice spires and a living caldera—rather
 than relying on palette changes alone.
 
@@ -235,7 +237,7 @@ Every sprite is **baked once at boot** into an offscreen canvas with a dark outl
 
 Hit-stop lives in the main loop, never inside `update()`, so the headless harness stays a pure function of `dt`.
 
-Open `balance.html` through the local server to run a repeatable 144-match
+Open `balance.html` through the local server to run a repeatable 240-match
 campaign regression sweep. It reports termination, bot win rate, and median
 duration for every battle and difficulty tier without changing the player save.
 
@@ -265,8 +267,8 @@ python -m http.server 5784
 
 ## Status
 
-The current prototype includes a persistent twelve-battle campaign across three
-worlds, dedicated world bosses, four level-specific battlefield mechanics, an
+The current prototype includes a persistent twenty-battle campaign across five
+worlds, dedicated world bosses, eight level-specific battlefield mechanics, an
 expanded enemy roster, a campaign map,
 warband selection, a bestiary, unlockable units, upgrades, four difficulty
 tiers, and desktop and landscape-mobile controls.

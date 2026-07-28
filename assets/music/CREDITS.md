@@ -32,5 +32,22 @@ not required, but the creators and original source pages are preserved here.
   Source: https://opengameart.org/content/epic-fight-themeboss-battle
   License: CC0 1.0
 
+- `skyward-storm.mp3` — “Eye of the Storm” by Joth.
+  Used for the Skyward Steps.
+  Source: https://opengameart.org/content/eye-of-the-storm
+  License: CC0 1.0
+- `boss-storm-sovereign.mp3` — “Boss Battle (loop)” by Alex McCulloch
+  (Pro Sensory). Used for the Storm Sovereign.
+  Source: https://opengameart.org/content/boss-battle-loop
+  License: CC0 1.0
+- `crown-range.ogg` — “Abandoned Castle Music (Loop)” by StarNinjas.
+  Used for the Crown Range.
+  Source: https://opengameart.org/content/abandoned-castle-music-loop
+  License: CC0 1.0
+- `boss-king-under-stone.mp3` — “Oh! boss!” by haruta.
+  Used for the King Under Stone.
+  Source: https://opengameart.org/content/oh-boss
+  License: CC0 1.0
+
 The remaining interface and combat sounds are synthesized at runtime by
 Bannerline’s Web Audio code.

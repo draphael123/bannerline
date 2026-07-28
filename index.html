@@ -68,7 +68,7 @@ try{
 }catch(e){}
 // Campaign save, separate from display options so wiping settings doesn't
 // wipe progress. Must be declared before reset() reads it at boot.
-const SAVE = { campaignVersion:2, progress:1, renown:0, unlocked:{}, upgrades:{},
+const SAVE = { campaignVersion:3, progress:1, renown:0, unlocked:{}, upgrades:{},
                won:false, loadout:["spear","knight","archer"] };
 try{
   const raw = localStorage.getItem("bannerline.save");
@@ -81,6 +81,11 @@ try{
       loaded.progress = p >= 10 ? 13 : p >= 7 ? p+2 : p >= 4 ? p+1 : p;
       loaded.campaignVersion = 2;
     }
+    // v3 appends two new worlds, so existing progress numbers stay valid.
+    if(loaded.campaignVersion<3){
+      if((loaded.progress||1)<=13) loaded.won=false;
+      loaded.campaignVersion=3;
+    }
     Object.assign(SAVE, loaded);
     delete SAVE.hero;
   }
@@ -89,7 +94,7 @@ function saveGame(){
   try{ localStorage.setItem("bannerline.save", JSON.stringify(SAVE)); }catch(e){}
 }
 function wipeSave(){
-  SAVE.campaignVersion=2; SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
+  SAVE.campaignVersion=3; SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
   delete SAVE.hero; SAVE.loadout=["spear","knight","archer"];
   saveGame();
 }
@@ -129,9 +134,13 @@ function buildRecordedMusic(){
     world0:make("assets/music/medieval-battle.mp3"),
     world1:make("assets/music/frostreach-winter.wav"),
     world2:make("assets/music/ember-desert.mp3"),
+    world3:make("assets/music/skyward-storm.mp3"),
+    world4:make("assets/music/crown-range.ogg"),
     boss0:make("assets/music/war-theme.ogg"),
     boss1:make("assets/music/boss-white-terror.mp3"),
     boss2:make("assets/music/boss-ash-tyrant.mp3"),
+    boss3:make("assets/music/boss-storm-sovereign.mp3"),
+    boss4:make("assets/music/boss-king-under-stone.mp3"),
   };
 }
 function unlockAudio(){
@@ -177,6 +186,8 @@ const MOTIFS = [
   {bass:[55,55,73.4,65.4], lead:[220,246.9,293.7,246.9,220,196,220,0]},
   {bass:[49,49,65.4,58.3], lead:[196,220,261.6,293.7,261.6,220,196,0]},
   {bass:[55,65.4,55,82.4], lead:[220,261.6,311.1,261.6,233.1,220,174.6,0]},
+  {bass:[49,61.7,73.4,61.7], lead:[196,246.9,293.7,370,293.7,246.9,220,0]},
+  {bass:[41.2,49,55,46.2], lead:[164.8,196,220,246.9,220,185,164.8,0]},
 ];
 function tickMusic(){
   if(!AC || OPT.music <= 0 || G.scene==="result" || G.overlay) return;
@@ -829,6 +840,18 @@ function artAshTyrant(c, K, frame){
   }
   const ax=atk?42:46; R(c,ax,16+B,5,30,P.woodD); R(c,ax-4,8+B,13,12,"#3f3430");
 }
+function artStormRoc(c,K,frame){
+  artFrostRoc(c,K,frame);
+  const B=[0,-2,0,2,0][frame];
+  R(c,18,14+B,7,4,"#8f73c9"); R(c,28,9+B,5,5,"#fff08a");
+  R(c,6,7+B,8,3,"#ba92ff"); R(c,45,7+B,7,3,"#ba92ff");
+}
+function artStoneKing(c,K,frame){
+  artOverchieftain(c,K,frame);
+  const B=[0,-1,0,1,0][frame];
+  R(c,4,12+B,8,31,"#66727a"); R(c,39,10+B,9,34,"#55616a");
+  R(c,12,-14+B,25,5,"#d5dce0"); R(c,19,-20+B,6,9,"#eef3f5");
+}
 
 const UNIT_ART = {
   "1":  { spear:artSpear,     knight:artKnight,    archer:artArcher,
@@ -837,6 +860,7 @@ const UNIT_ART = {
   "-1": { spear:artGobSpear, knight:artGobBrute, archer:artGobShaman,
           runner:artGobRunner, shield:artGobShield, bomber:artGobBomber,
           overchief:artOverchieftain, frostroc:artFrostRoc, ashtyrant:artAshTyrant,
+          stormroc:artStormRoc, stoneking:artStoneKing,
           warchief:artWarchief, chieftain:artChieftain },
 };
 const UNIT_BOX = {
@@ -846,6 +870,7 @@ const UNIT_BOX = {
   "-1": { spear:{w:30,h:38}, knight:{w:36,h:47}, archer:{w:30,h:48},
           runner:{w:32,h:40}, shield:{w:42,h:48}, bomber:{w:40,h:43},
           overchief:{w:52,h:70}, frostroc:{w:60,h:48}, ashtyrant:{w:58,h:62},
+          stormroc:{w:60,h:48}, stoneking:{w:54,h:72},
           warchief:{w:48,h:62}, chieftain:{w:42,h:54} },
 };
 const SPR = {};                               // SPR[type][side][frame] / .flash
@@ -1160,9 +1185,21 @@ const TYPES = {
     armor:{arrow:0.50}, laneSpill:2, bigTarget:true, boss:true, fireAura:true,
     beats:"THE PACKED", hint:"Spread out when the ground burns.",
   },
+  stormroc: {
+    key:"stormroc", name:"STORM SOVEREIGN", cost:0, hp:1180, speed:4.2,
+    reach:4.8, dmg:28, rate:1.0, cls:"light", laneSpill:2,
+    armor:{arrow:0.68}, bigTarget:true, boss:true, flying:true,
+    beats:"THE LOWLANDS", hint:"Guard every column when it dives.",
+  },
+  stoneking: {
+    key:"stoneking", name:"KING UNDER STONE", cost:0, hp:1820, speed:2.0,
+    reach:4.2, dmg:39, rate:1.65, cls:"heavy", cleave:5.2, cleaveMult:0.58,
+    armor:{arrow:0.44}, laneSpill:2, bigTarget:true, boss:true,
+    beats:"THE UNWORTHY", hint:"Break the crown with massed spears.",
+  },
 };
 const ROSTER_ALL = ["spear","knight","archer","mage","outrider","sapper"];
-const ENEMY_ONLY = ["runner","shield","bomber","overchief","frostroc","ashtyrant"];
+const ENEMY_ONLY = ["runner","shield","bomber","overchief","frostroc","ashtyrant","stormroc","stoneking"];
 const ORDER = ["spear","knight","archer"];
 // The buyable roster grows as you unlock. Everything is baked at boot; only
 // the shop decides what you may actually field.
@@ -1201,6 +1238,16 @@ const WORLDS = [
     geysers:[{x:42,row:1},{x:58,row:3}],
     tag:"EMBERS \u2014 KEEPS BURN",
     rule:"Both keeps are burning. Nobody can afford to wait." },
+  { name:"THE SKYWARD STEPS", short:"SKYWARD",
+    ground:{p:"#84b9a6", pd:"#4d7f78", pl:"#b8d9c9", e:"#9e6c79", ed:"#684553", el:"#c69aa3"},
+    speed:1.02, income:1.22, vertical:true,
+    tag:"ASCENT \u2014 FIGHT UPWARD",
+    rule:"Five columns climb toward the summit. The battle runs south to north." },
+  { name:"THE CROWN RANGE", short:"CROWN RANGE",
+    ground:{p:"#9b9d83", pd:"#666956", pl:"#c9cbb1", e:"#866f68", ed:"#574945", el:"#ad9188"},
+    speed:0.92, income:1.28, elevation:true,
+    tag:"HIGH GROUND \u2014 SLOW CLIMB",
+    rule:"Steep terraces slow every advance. Gates and avalanches rule the pass." },
 ];
 function world(){ return WORLDS[battle().world || 0]; }
 // Levels were varied but not ESCALATING - the campaign was nine one-off
@@ -1268,6 +1315,34 @@ const BATTLES = [
     boss:{at:0, hpTrigger:1, type:"ashtyrant"}, comp:"ranged", landmark:"caldera",
     objective:{type:"boss"},
     brief:"The final tyrant waits in the fire. Kill it." },
+  // --- IV. THE SKYWARD STEPS ------------------------------------------
+  { world:3, name:"THE FIRST ASCENT", pressure:1.28, atmo:0, blocked:[], boss:null,
+    comp:"swarm", objective:{type:"raze"},
+    brief:"Turn north. Climb five columns and take the summit camp." },
+  { world:3, name:"THE WINDING STAIR", pressure:1.34, atmo:1, blocked:[0,4], boss:null,
+    comp:"ranged", objective:{type:"hold",count:4,seconds:20},
+    brief:"The outer stairs have fallen. Hold four standards on the inner climb." },
+  { world:3, name:"ABOVE THE CLOUDS", pressure:1.42, atmo:2, blocked:[], boss:null,
+    comp:"heavy", mechanic:"updraft", objective:{type:"raze"},
+    brief:"Updrafts throw whole columns out of formation. Watch the warning." },
+  { world:3, name:"THE STORM SOVEREIGN", pressure:1.52, atmo:2, blocked:[],
+    boss:{at:0,hpTrigger:1,type:"stormroc"}, comp:"ranged", landmark:"summit",
+    objective:{type:"boss"},
+    brief:"At the highest stair, the sovereign dives from the storm." },
+  // --- V. THE CROWN RANGE ---------------------------------------------
+  { world:4, name:"THE LOWER TERRACES", pressure:1.38, atmo:3, blocked:[], boss:null,
+    comp:"heavy", mechanic:"elevation", objective:{type:"raze"},
+    brief:"Every terrace is higher and slower. Win the climb one banner at a time." },
+  { world:4, name:"THE WHITE FALL", pressure:1.48, atmo:3, blocked:[], boss:null,
+    comp:"swarm", mechanic:"avalanche", objective:{type:"survive",seconds:75},
+    brief:"Avalanches scour one lane at a time. Survive the mountain's anger." },
+  { world:4, name:"THE THREE GATES", pressure:1.54, atmo:3, blocked:[], boss:null,
+    comp:"ranged", mechanic:"gates", objective:{type:"demolish",count:3},
+    brief:"Three fortified gates seal the crown road. Break every one." },
+  { world:4, name:"THE KING UNDER STONE", pressure:1.64, atmo:2, blocked:[],
+    boss:{at:0,hpTrigger:1,type:"stoneking"}, comp:"heavy", landmark:"citadel",
+    objective:{type:"boss"},
+    brief:"No castle remains above him. Bring down the king beneath the peak." },
 ];
 
 // Difficulty scales the AI's GENERALSHIP and purse, never unit stats — you
@@ -1331,6 +1406,12 @@ function resetBattleObjects(){
       {kind:"pyre",x:61,row:1,hp:190,max:190,t:3},
       {kind:"pyre",x:76,row:3,hp:210,max:210,t:5},
       {kind:"pyre",x:90,row:2,hp:230,max:230,t:7},
+    ];
+  } else if(battle().mechanic==="gates"){
+    G.objects=[
+      {kind:"gate",x:58,row:1,hp:280,max:280,t:0},
+      {kind:"gate",x:74,row:2,hp:340,max:340,t:0},
+      {kind:"gate",x:89,row:3,hp:410,max:410,t:0},
     ];
   }
 }
@@ -1563,10 +1644,11 @@ function attackObject(u, o){
   G.shake=Math.max(G.shake,1.4); thud(0.1,0.045,520);
   if(o.hp<=0 && !o.dead){
     o.dead=true; G.flash=Math.max(G.flash,.28); G.shake=5;
-    G.toast=o.kind==="drum"?"WAR DRUM SILENCED":"WAR PYRE QUENCHED"; G.toastT=1.6;
+    G.toast=o.kind==="drum"?"WAR DRUM SILENCED":o.kind==="gate"?"MOUNTAIN GATE BROKEN":"WAR PYRE QUENCHED"; G.toastT=1.6;
     for(let i=0;i<22;i++) G.parts.push({
       x:o.x,y:ROW_Y[o.row]-10,vx:(Math.random()*2-1)*45,vy:-Math.random()*90-15,
-      life:.45+Math.random()*.55,c:o.kind==="pyre"?(i%2?"#ff7a32":"#4a3028"):(i%2?"#b98246":"#dbc089"),s:2});
+      life:.45+Math.random()*.55,c:o.kind==="pyre"?(i%2?"#ff7a32":"#4a3028")
+        :o.kind==="gate"?(i%2?"#7d858f":"#c8ccd4"):(i%2?"#b98246":"#dbc089"),s:2});
     tone(o.kind==="drum"?180:120,.35,"sawtooth",.04,.55);
   }
 }
@@ -1729,15 +1811,25 @@ function update(dt){
       tone(115,.6,"sawtooth",.025,.7);
     }
   } else G.blizzard=0;
-  if(battle().mechanic==="breakingIce"){
+  if(["breakingIce","updraft","avalanche"].includes(battle().mechanic)){
     G.hazardT+=dt;
     if(G.hazardT>=9 && G.hazardT-dt<9){
       G.hazardFire=1;
       for(const u of G.units){
         if(u.dead||u.row!==G.hazardRow) continue;
-        damage(u,32,"blast"); u.kb+=u.side*(Math.random()<.5?-1:1)*1.8;
+        const mech=battle().mechanic;
+        if(mech==="updraft"){
+          const open=[]; for(let i=0;i<ROWS;i++) if(laneOpen(i)&&i!==u.row) open.push(i);
+          u.row=open[Math.floor(Math.random()*open.length)]; u.y=ROW_Y[u.row];
+          u.kb-=u.side*2.2;
+        } else {
+          damage(u,mech==="avalanche"?58:32,"blast");
+          u.kb+=u.side*(Math.random()<.5?-1:1)*(mech==="avalanche"?3:1.8);
+        }
       }
-      G.toast="THE ICE BREAKS"; G.toastT=1.4; G.shake=7;
+      G.toast=battle().mechanic==="updraft"?"THE WIND SHIFTS"
+        :battle().mechanic==="avalanche"?"AVALANCHE":"THE ICE BREAKS";
+      G.toastT=1.4; G.shake=7;
       thud(.45,.1,190);
     }
     if(G.hazardT>=12){
@@ -1770,12 +1862,12 @@ function update(dt){
     u.bob += dt*9;
     u.specialT += dt;
 
-    if(u.type==="frostroc" && u.specialT >= 4.8){
+    if((u.type==="frostroc"||u.type==="stormroc") && u.specialT >= 4.8){
       u.specialT = 0;
       const open = [];
       for(let i=0;i<ROWS;i++) if(laneOpen(i)) open.push(i);
       u.row = open[Math.floor(Math.random()*open.length)]; u.y = ROW_Y[u.row]-8;
-      G.toast="THE TERROR SWOOPS"; G.toastT=1.0;
+      G.toast=u.type==="stormroc"?"LIGHTNING DIVE":"THE TERROR SWOOPS"; G.toastT=1.0;
       G.rings.push({x:u.x,y:u.y,r:4,life:0.5,c:"#d8f4ff"});
       tone(170,0.35,"sawtooth",0.045,1.8);
     } else if(u.type==="overchief" && u.specialT >= 11){
@@ -1794,6 +1886,13 @@ function update(dt){
         c:i%2?"#ff6a2c":"#ffd45a",s:2});
       G.shake=Math.max(G.shake,5); G.toast="THE GROUND BURNS"; G.toastT=1.1;
       thud(0.35,0.09,260);
+    } else if(u.type==="stoneking" && u.specialT>=8.5){
+      u.specialT=0;
+      for(const o of G.units) if(!o.dead&&o.side>0&&Math.abs(o.x-u.x)<11){
+        damage(o,28,"blast"); o.kb-=2.5;
+      }
+      G.toast="THE MOUNTAIN TREMBLES"; G.toastT=1.2; G.shake=8;
+      thud(.55,.12,150);
     }
 
     if(u.kb){ u.x += u.kb*dt*6; u.kb *= 0.86; if(Math.abs(u.kb)<0.02) u.kb=0; }
@@ -1836,7 +1935,8 @@ function update(dt){
       const packed = ff && ff.d < 2.4;
       // SUPPLY LINE: you move fast across ground you own.
       const ownLand = u.side>0 ? (u.x < G.front - 2) : (u.x > G.front + 2);
-      const spd = T.speed * (ownLand ? 2.4 : 1) * world().speed * (bannerMorale(u)?1.10:1);
+      const climb=world().elevation ? (0.92-Math.floor(Math.max(0,u.x)/25)*0.045) : 1;
+      const spd = T.speed * (ownLand ? 2.4 : 1) * world().speed * climb * (bannerMorale(u)?1.10:1);
       let moved = 0;
       if(!packed){ moved = spd*dt*u.side; u.x += moved; }
       else if(ff && ff.d < 3.4){ moved = spd*0.25*dt*u.side; u.x += moved; }
@@ -2362,10 +2462,12 @@ function drawTerritory(){
       glow(gx, gyy-h*0.5, 60, "rgba(255,150,50,1)", 0.8);
     }
   }
-  if(battle().mechanic==="breakingIce"){
+  if(["breakingIce","updraft","avalanche"].includes(battle().mechanic)){
     const y=GROUND_Y+ROW_Y[G.hazardRow], warn=G.hazardT>=7;
+    const mech=battle().mechanic;
     ctx.globalAlpha=warn ? .55 : .18;
-    px(0,y-6,W,12,warn?"#a9e8f2":"#d8f5fa");
+    px(0,y-6,W,12,mech==="updraft"?(warn?"#e8f4d0":"#bfd9c5")
+      :mech==="avalanche"?(warn?"#f5fbff":"#c9d7dc"):(warn?"#a9e8f2":"#d8f5fa"));
     for(let x=8;x<W;x+=23){
       const jag=Math.sin(x*.8)*4;
       px(x,y+jag,13,2,warn?"#477b91":"#8ab6c4");
@@ -2374,7 +2476,10 @@ function drawTerritory(){
     if(warn){
       const pulse=.35+Math.sin(G.wind*18)*.25;
       glow(W/2,y,120,"rgba(150,235,255,1)",pulse);
-      txt(G.hazardT<9?"ICE CRACKING":"BROKEN ICE",W/2,y-9,8,"#eaffff","center");
+      const label=mech==="updraft"?(G.hazardT<9?"UPDRAFT RISING":"WIND SHIFT")
+        :mech==="avalanche"?(G.hazardT<9?"SNOW SLIPPING":"AVALANCHE")
+        :(G.hazardT<9?"ICE CRACKING":"BROKEN ICE");
+      txt(label,W/2,y-9,8,"#eaffff","center");
     }
     ctx.globalAlpha=1;
   }
@@ -2519,6 +2624,11 @@ function drawBanners(){
     }
   }
 }
+function laneAtX(pxv){
+  let best=0,bd=1e9;
+  for(let i=0;i<ROWS;i++){ const d=Math.abs(pxv-verticalX(i)); if(d<bd){bd=d;best=i;} }
+  return best;
+}
 
 function drawBattleLandmark(){
   const bt=battle(), phase=(G.battle-1)%4;
@@ -2554,6 +2664,14 @@ function drawBattleLandmark(){
       const t=(G.wind*0.35+i/12)%1;
       px(500+(i*37)%115,203-t*52,2,3,i%2?"#ff6a2c":"#ffd45a");
     }
+  } else if(bt.landmark==="summit"){
+    for(let i=0;i<5;i++){ const x=488+i*31,h=18+i%2*14;
+      px(x,207-h,22,h,"#536c70"); px(x+4,207-h,14,3,"#d8ece8"); }
+    px(545,154,4,50,P.woodD); px(549,156,28,13,"#8060ad");
+  } else if(bt.landmark==="citadel"){
+    px(475,168,150,39,"#515961");
+    for(let x=480;x<620;x+=28){px(x,156,22,51,"#6f787e");px(x+4,151,14,8,"#aeb5b8");}
+    px(543,179,22,28,"#29282a");
   } else if(world().ice){
     for(let i=0;i<4+phase;i++){
       const x=105+i*102+(phase*17)%50;
@@ -2588,6 +2706,10 @@ function drawBattleObjects(){
       px(x-10,y-24,3,22,P.woodD); px(x+9,y-24,3,22,P.woodD);
       const beat=Math.max(0,1-o.t/1.2);
       if(beat>0) glow(x,y-12,24,"rgba(255,190,90,1)",beat*.45);
+    } else if(o.kind==="gate"){
+      px(x-15,y-24,31,22,"#596169"); px(x-12,y-21,25,17,"#858e94");
+      for(let gx=x-9;gx<=x+9;gx+=9) px(gx,y-26,6,7,"#aeb5b8");
+      px(x-3,y-18,7,16,"#332c29"); px(x-14,y-5,29,4,"#444b50");
     } else {
       px(x-9,y-6,19,6,"#33221d"); px(x-6,y-14,4,10,"#5a3727"); px(x+3,y-18,4,14,"#5a3727");
       const f=.65+Math.sin(G.wind*7+o.x)*.25;
@@ -3162,7 +3284,8 @@ function drawHUD(){
     dc="#ffcf85";
   } else if(obj.type === "demolish"){
     const left=G.objects.filter(o=>!o.dead).length;
-    line=(battle().mechanic==="drums"?"SILENCE THE WAR DRUMS   ":"QUENCH THE WAR PYRES   ")+left+" LEFT";
+    line=(battle().mechanic==="drums"?"SILENCE THE WAR DRUMS   "
+      :battle().mechanic==="gates"?"BREAK THE MOUNTAIN GATES   ":"QUENCH THE WAR PYRES   ")+left+" LEFT";
     dc=left===1?"#a8ffd8":"#ffd0a0";
   } else {
     const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "HOLDING";
@@ -3174,6 +3297,10 @@ function drawHUD(){
      (world().tag !== "OPEN GROUND" || battle().mechanic)){
     const t = battle().mechanic==="blizzard" ? (G.blizzard>.35?"BLIZZARD — RANGED -42%":"CLEAR WINDOW")
             : battle().mechanic==="breakingIce" ? (G.hazardT>=7?"ICE WARNING — CHANGE LANES":"ICE STABLE")
+            : battle().mechanic==="updraft" ? (G.hazardT>=7?"UPDRAFT — CHANGE COLUMNS":"WINDS CALM")
+            : battle().mechanic==="avalanche" ? (G.hazardT>=7?"AVALANCHE — CHANGE LANES":"SNOW HOLDING")
+            : battle().mechanic==="elevation" ? "STEEP GROUND — ADVANCE SLOWED"
+            : battle().mechanic==="gates" ? "FORTIFIED GATES"
             : battle().mechanic==="drums" ? "DRUMS MUST FALL"
             : battle().mechanic==="pyres" ? "PYRES FEED ENEMY GOLD"
             : world().tag;
@@ -3339,7 +3466,71 @@ function drawTutorial(){
 //////////////////////////////////////////////////////////////////////////////
 // SCENES
 //////////////////////////////////////////////////////////////////////////////
+function verticalX(row){ return W/2+(row-2)*62; }
+function verticalY(pos){ return 286-pos*1.68; }
+function drawVerticalKeep(side){
+  const y=side>0?292:105, c=side>0?P.blue:P.red, light=side>0?P.blueL:P.redL;
+  ctx.globalAlpha=.28; px(W/2-70,y-5,140,8,"#000"); ctx.globalAlpha=1;
+  px(W/2-48,y-28,96,26,P.steelD); px(W/2-44,y-25,88,20,"#747d86");
+  px(W/2-15,y-35,30,12,light); px(W/2-10,y-31,20,8,c);
+  const k=side>0?G.keepP:G.keepE;
+  capsule(W/2-42,y-43,84,5,k.hp/k.max,side>0?"#66d96e":"#e8574a","#ffffff60");
+}
+function drawVerticalUnit(u){
+  const S=SPR[u.type][u.side], frame=u.atkAnim>0?4:u.fighting?0:Math.floor(u.bob*.8)%4;
+  const img=u.flash>0?S.flashes[frame]:S.frames[(u.vari||0)*FRAMES+frame];
+  const x=verticalX(u.row), y=verticalY(u.x), k=.72+(u.row===2?.08:0);
+  const dw=Math.round(S.w*k),dh=Math.round(S.h*k);
+  ctx.globalAlpha=.25; px(x-10,y+2,20,3,"#000"); ctx.globalAlpha=1;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(u.side>0?-Math.PI/2:Math.PI/2);
+  ctx.drawImage(img,-dw/2,-dh,dw,dh); ctx.restore();
+  if(u.hp<u.maxHp){
+    const w=u.T.boss?34:16; capsule(x-w/2,y-dw/2-7,w,3,u.hp/u.maxHp,
+      u.side>0?"#66d96e":"#e8574a","#ffffff70");
+  }
+}
+function drawVerticalBattlefield(){
+  const g=world().ground;
+  px(0,0,W,300,"#799aa0"); px(0,86,W,214,"#637e68");
+  // Contour bands sell height; the centre road points unequivocally north.
+  for(let y=112;y<294;y+=18){
+    ctx.globalAlpha=.20; px(80,y,W-160,8,y%36?"#d3dbc0":"#435e55"); ctx.globalAlpha=1;
+  }
+  const fy=verticalY(G.front);
+  ctx.globalAlpha=.48; px(76,fy,W-152,294-fy,g.p); px(76,106,W-152,fy-106,g.e); ctx.globalAlpha=1;
+  for(let i=0;i<ROWS;i++){
+    const x=verticalX(i),open=laneOpen(i);
+    ctx.globalAlpha=open ? .20 : .45; px(x-22,106,44,188,open?"#e7e0b0":"#313b39"); ctx.globalAlpha=1;
+    if(open) for(let y=112;y<290;y+=10) px(x-1,y,3,5,"#6b735e");
+  }
+  const sel=verticalX(G.lane),pulse=.18+Math.sin(G.wind*4)*.05+G.laneFlash*.3;
+  ctx.globalAlpha=pulse; px(sel-25,106,50,188,"#fff0a0"); ctx.globalAlpha=1;
+  txt("SUMMIT",W/2,101,8,"#f5edcf","center"); txt("ASCENT",W/2,298,7,"#f5edcf","center");
+  for(const b of G.banners){
+    const y=verticalY(b.x), side=b.owner;
+    px(W/2-3,y-8,3,15,P.woodD);
+    if(side>0) px(W/2,y-8,11,7,P.blue); else px(W/2-11,y-8,11,7,P.red);
+  }
+  drawVerticalKeep(1);
+  if((battle().objective||{}).type!=="boss") drawVerticalKeep(-1);
+  const cast=G.units.slice().sort((a,b)=>b.x-a.x);
+  for(const u of cast) drawVerticalUnit(u);
+  for(const s of G.shots){
+    const t=Math.min(1,s.t/s.dur),x0=verticalX(s.row),y0=verticalY(s.x);
+    const x1=verticalX(s.target?s.target.row:s.row),y1=verticalY(s.tx);
+    px(x0+(x1-x0)*t-1,y0+(y1-y0)*t-1,3,3,s.aoe?"#a8ecff":"#fff0c0");
+  }
+  if(battle().mechanic==="updraft"&&G.hazardT>=7){
+    const x=verticalX(G.hazardRow),p=(G.hazardT-7)/2;
+    ctx.globalAlpha=.22+Math.sin(G.wind*16)*.12; px(x-27,106,54,188,"#dff4d1");ctx.globalAlpha=1;
+    for(let y=280;y>120;y-=26) px(x+Math.sin(y+G.wind*5)*15,y,3,8,"#f1ffe8");
+    txt(p<1?"UPDRAFT RISING":"WIND SHIFT",x,117,7,"#f1ffe8","center");
+  }
+  drawWeather(); drawGlows(); drawGrade();
+}
+
 function drawBattlefield(){
+  if(world().vertical){ drawVerticalBattlefield(); return; }
   ctx.save();
   if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
   drawSky(); drawBirds(); drawWater(); drawFarBank();
@@ -3387,16 +3578,16 @@ function drawBattlefield(){
 //////////////////////////////////////////////////////////////////////////////
 // CAMPAIGN MAP + STORE
 //////////////////////////////////////////////////////////////////////////////
-// three worlds, four battles each — a row per world
+// Five worlds, four battles each — a row per world.
 function mapNode(i){
   const w = Math.floor(i/4), c = i%4;
-  return { x:135 + c*125, y:118 + w*66 };
+  return { x:150 + c*118, y:96 + w*42 };
 }
-const MAP_NODES = { length:12 };
+const MAP_NODES = { length:20 };
 const MAP_SHOP  = {x:W/2-158, y:322, w:150, h:24};
 const MAP_WARB  = {x:W/2+8,   y:322, w:150, h:24};
 const MAP_BACK  = {x:12, y:8, w:74, h:22};
-function nodeBox(i){ const n=mapNode(i); return {x:n.x-23, y:n.y-23, w:46, h:46}; }
+function nodeBox(i){ const n=mapNode(i); return {x:n.x-17, y:n.y-17, w:34, h:34}; }
 
 function drawMapRegions(){
   // The campaign is one long southbound journey. Broad, irregular washes make
@@ -3448,39 +3639,28 @@ function drawMapRegions(){
     px(x,y-15,9,17,"#302522"); px(x-3,y-17,15,4,"#4b3028");
     px(x+3,y-10,3,4,"#d87835");
   }
+  ctx.globalAlpha=.32; px(8,213,624,42,"#477f78"); px(8,255,624,43,"#575e5e");
+  ctx.globalAlpha=.65;
+  for(let x=85;x<625;x+=54){ px(x,245-(x%3)*3,36,3,"#c6d9c7"); px(x+12,239-(x%3)*3,24,3,"#dce9d8"); }
+  for(let x=42;x<625;x+=46){
+    ctx.fillStyle="#899495"; ctx.beginPath();ctx.moveTo(x-18,296);ctx.lineTo(x,267-(x%4)*3);ctx.lineTo(x+19,296);ctx.fill();
+    px(x-4,276-(x%4)*3,8,3,"#e9efef");
+  }
   ctx.globalAlpha=1;
   ctx.restore();
 }
 
 function drawMapLandmark(i, x, y, unlocked){
   const worldIndex=Math.floor(i/4), boss=i%4===3;
+  if(!boss) return;
   ctx.save(); ctx.globalAlpha=unlocked?0.9:0.28;
-  const ink=worldIndex===0?"#b8c27a":worldIndex===1?"#d7edf0":"#e69a50";
-  const dark=worldIndex===0?"#34482f":worldIndex===1?"#506b78":"#4b2924";
-  if(boss){
-    // Each route visibly ends somewhere: palisade, eyrie, then volcano.
-    if(worldIndex===0){
-      px(x-13,y-31,27,8,dark); px(x-10,y-39,5,10,dark); px(x+6,y-39,5,10,dark);
-      px(x-2,y-35,5,12,ink);
-    } else if(worldIndex===1){
-      ctx.fillStyle=dark; ctx.beginPath(); ctx.moveTo(x-16,y-25);ctx.lineTo(x,y-45);
-      ctx.lineTo(x+17,y-25);ctx.fill(); px(x-7,y-29,15,5,ink);
-      px(x-2,y-46,5,8,"#eefcff");
-    } else {
-      ctx.fillStyle=dark; ctx.beginPath(); ctx.moveTo(x-18,y-24);ctx.lineTo(x-7,y-42);
-      ctx.lineTo(x+4,y-31);ctx.lineTo(x+12,y-44);ctx.lineTo(x+19,y-24);ctx.fill();
-      glow(x,y-29,16,"rgba(255,92,35,1)",.28);
-      px(x-4,y-29,9,3,"#ff9a42");
-    }
-  } else if(worldIndex===0){
-    px(x-2,y-33,4,10,dark); px(x-8,y-39,16,8,ink);
-  } else if(worldIndex===1){
-    px(x-9,y-25,4,10,dark); px(x+5,y-30,3,15,dark);
-    px(x-11,y-28,8,4,ink); px(x+2,y-33,8,4,ink);
-  } else {
-    px(x-8,y-27,16,4,dark); px(x-5,y-34,4,8,dark); px(x+3,y-39,4,13,dark);
-    px(x+4,y-41,3,3,ink);
-  }
+  const colors=["#b8c27a","#d7edf0","#e69a50","#c4dcff","#d7d9d3"];
+  const ink=colors[worldIndex], dark="#2d2928", bx=x+23, by=y+3;
+  if(worldIndex===0){ px(bx-5,by-7,11,10,dark); px(bx-3,by-11,3,5,ink); px(bx+2,by-11,3,5,ink); }
+  else if(worldIndex===1){ ctx.fillStyle=dark;ctx.beginPath();ctx.moveTo(bx-7,by+4);ctx.lineTo(bx,by-10);ctx.lineTo(bx+8,by+4);ctx.fill();px(bx-2,by-9,4,3,ink); }
+  else if(worldIndex===2){ ctx.fillStyle=dark;ctx.beginPath();ctx.moveTo(bx-8,by+5);ctx.lineTo(bx-2,by-10);ctx.lineTo(bx+2,by-3);ctx.lineTo(bx+7,by-11);ctx.lineTo(bx+9,by+5);ctx.fill();px(bx-2,by-1,5,2,ink); }
+  else if(worldIndex===3){ px(bx-1,by-10,3,16,dark);px(bx-6,by-7,13,3,ink);px(bx-4,by-2,9,3,ink); }
+  else { px(bx-8,by-7,17,12,dark);px(bx-5,by-11,4,5,ink);px(bx+3,by-11,4,5,ink);px(bx-2,by-2,5,7,ink); }
   ctx.restore();
 }
 
@@ -3550,15 +3730,15 @@ function drawMap(){
       if(Math.floor(t*22)%2===0) px(x-1,y-1,3,3, done?"#d7b54a":"#5d4a30");
     }
   }
-  for(let wi=0; wi<3; wi++){
+  for(let wi=0; wi<WORLDS.length; wi++){
     const first = wi*4;
     const unlocked = SAVE.progress > first;
     const n0 = mapNode(first);
-    txt(WORLDS[wi].short, 26, n0.y+3, 8,
+    txt(WORLDS[wi].short, 18, n0.y+2, 7,
         unlocked?"#e8dcc0":"#6a6153", "left", false);
     if(!unlocked) continue;
-    ctx.font='700 7px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
-    ctx.fillStyle="#8a7e66"; ctx.fillText(WORLDS[wi].tag, 26, n0.y+14);
+    ctx.font='700 5px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
+    ctx.fillStyle="#a79b83"; ctx.fillText(WORLDS[wi].tag.slice(0,18), 18, n0.y+10);
   }
   for(let i=0;i<BATTLES.length;i++){
     const bn=i+1, done=SAVE.progress>bn, cur=SAVE.progress===bn, locked=SAVE.progress<bn;
@@ -3572,8 +3752,8 @@ function drawMap(){
         locked?"#6a6153":done?"#a8ffd8":"#ffe9a8", "center");
     if(!locked){
       const o = BATTLES[i].objective.type;
-      txt(BATTLES[i].name.slice(0,15), n.x, n.y+32, 6, "#d8cdb4", "center", false);
-      if(o!=="raze") txt(o==="boss"?"SLAY":o.toUpperCase(), n.x, n.y+40, 6, "#9fd6bd", "center", false);
+      txt(BATTLES[i].name.slice(0,18), n.x, n.y+23, 5, "#d8cdb4", "center", false);
+      if(o!=="raze") txt(o==="boss"?"SLAY":o.toUpperCase(), n.x, n.y+29, 5, "#9fd6bd", "center", false);
       if(cur){
         const wave=Math.round(Math.sin(G.wind*5)*2);
         px(n.x+17,n.y-20,2,14,"#e8dcc0");
@@ -3909,14 +4089,17 @@ const BEST_ROWS = [
   {t:"overchief",side:-1, who:"BOSS"},
   {t:"frostroc", side:-1, who:"BOSS"},
   {t:"ashtyrant",side:-1,who:"BOSS"},
+  {t:"stormroc", side:-1, who:"BOSS"},
+  {t:"stoneking",side:-1,who:"BOSS"},
 ];
 const GOB_NAME = {spear:"SKIRMISHER", knight:"BRUTE", archer:"SHAMAN",
                   runner:"RUNNER", shield:"SHIELD BEARER", bomber:"FIRE BOMBER",
                   chieftain:"CHIEFTAIN", overchief:"OVERCHIEFTAIN",
-                  frostroc:"WHITE TERROR", ashtyrant:"ASH TYRANT"};
+                  frostroc:"WHITE TERROR", ashtyrant:"ASH TYRANT",
+                  stormroc:"STORM SOVEREIGN", stoneking:"KING UNDER STONE"};
 function bestBox(i){
-  const col = i % 5, row = Math.floor(i/5);
-  return {x:10 + col*126, y:82 + row*78, w:118, h:70};
+  const col = i % 6, row = Math.floor(i/6);
+  return {x:8 + col*105, y:82 + row*78, w:98, h:70};
 }
 function drawBestiary(){
   px(0,0,W,H,"#2a2118");
@@ -3928,24 +4111,24 @@ function drawBestiary(){
     const locked = r.lock && !SAVE.unlocked[r.lock];
     panel(b.x, b.y, b.w, b.h, locked?"#2e281f":"#33261a", P.panelD, P.panelL, 2);
     const S = SPR[r.t][r.side];
-    const sc = Math.min(38/S.w, 46/S.h);
+    const sc = Math.min(31/S.w, 44/S.h);
     ctx.globalAlpha = locked ? 0.25 : 1;
     ctx.drawImage(S.frames[0], b.x+5, b.y+b.h-8-Math.round(S.h*sc),
                   Math.round(S.w*sc), Math.round(S.h*sc));
     ctx.globalAlpha = 1;
     const nm = r.side>0 ? T.name : (GOB_NAME[r.t]||T.name);
-    txt((locked?"???":nm).slice(0,15), b.x+47, b.y+15, 7, locked?"#6a6153":"#ffe9a8", "left", false);
-    ctx.font='700 7px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
+    txt((locked?"???":nm).slice(0,14), b.x+38, b.y+15, 6, locked?"#6a6153":"#ffe9a8", "left", false);
+    ctx.font='700 6px "Trebuchet MS",Verdana,sans-serif'; ctx.textAlign="left";
     if(locked){
-      ctx.fillStyle="#6a6153"; ctx.fillText("locked", b.x+47, b.y+29);
-      ctx.fillText("quartermaster", b.x+47, b.y+40);
+      ctx.fillStyle="#6a6153"; ctx.fillText("locked", b.x+38, b.y+29);
+      ctx.fillText("quartermaster", b.x+38, b.y+40);
     } else {
       ctx.fillStyle="#b0a48c";
-      ctx.fillText("HP  "+T.hp, b.x+47, b.y+29);
-      ctx.fillText("DMG "+T.dmg, b.x+47, b.y+40);
-      ctx.fillText(T.ranged?"RANGED":"MELEE", b.x+47, b.y+51);
+      ctx.fillText("HP  "+T.hp, b.x+38, b.y+29);
+      ctx.fillText("DMG "+T.dmg, b.x+38, b.y+40);
+      ctx.fillText(T.ranged?"RANGED":"MELEE", b.x+38, b.y+51);
       ctx.fillStyle = "#2f7d5e";
-      ctx.fillText(("beats "+(T.beats||"-")).slice(0,16), b.x+47, b.y+62);
+      ctx.fillText(("beats "+(T.beats||"-")).slice(0,15), b.x+38, b.y+62);
       if(r.side>0 && T.cost){
         ctx.drawImage(coinImg, b.x+b.w-34, b.y+6);
         txt(T.cost, b.x+b.w-20, b.y+15, 9, "#ffe9a8", "left", false);
@@ -3991,6 +4174,10 @@ function drawIntro(){
   if(bt.mechanic==="blizzard") tags.push("BLIZZARDS");
   if(bt.mechanic==="breakingIce") tags.push("BREAKING ICE");
   if(bt.mechanic==="pyres") tags.push("WAR PYRES");
+  if(bt.mechanic==="updraft") tags.push("UPDRAFTS");
+  if(bt.mechanic==="avalanche") tags.push("AVALANCHES");
+  if(bt.mechanic==="elevation") tags.push("ELEVATION");
+  if(bt.mechanic==="gates") tags.push("SIEGE GATES");
   if(tags.length) txt(tags.join("   \u2022   "), W/2+ox, 248, 7, "#ffb49a", "center", false);
   ctx.globalAlpha = 1;
 }
@@ -4174,8 +4361,10 @@ cv.addEventListener("pointerdown", e=>{
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; return; }
   if(inBox(p,SPEED_BTN)){ G.speed = G.speed===1?2:1; return; }
   if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
-  if(p.y > BAND_TOP-8 && p.y < BAND_BOT+8){        // click a lane to select it
-    G.lane = nearestOpenLane(laneAt(p.y)); G.laneFlash = 1; G.tut.laneMoved = true;
+  if((world().vertical && p.x>120&&p.x<W-120&&p.y>100&&p.y<300) ||
+     (!world().vertical && p.y > BAND_TOP-8 && p.y < BAND_BOT+8)){
+    G.lane = nearestOpenLane(world().vertical?laneAtX(p.x):laneAt(p.y));
+    G.laneFlash = 1; G.tut.laneMoved = true;
     tone(500+G.lane*40, 0.05, "square", 0.03); return;
   }
   roster().forEach((k,i)=>{ if(inBox(p,cardRect(i))) tryBuy(k); });
