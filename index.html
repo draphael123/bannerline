@@ -973,7 +973,7 @@ const WORLDS = [
     rule:"Open country. Nothing but them and you." },
   { name:"THE FROSTREACH", short:"FROSTREACH",
     ground:{p:"#bcd8e4", pd:"#7fa3b8", pl:"#e2f1f7", e:"#b08a92", ed:"#7c5b66", el:"#d4b0b4"},
-    speed:0.82, income:1.00,
+    speed:0.90, income:1.06,
     rule:"Deep snow. Every soldier marches slower \u2014 both sides." },
   { name:"THE EMBER WASTE", short:"EMBER",
     ground:{p:"#c9a05e", pd:"#8e6a34", pl:"#e6c489", e:"#a34a34", ed:"#6d2a1e", el:"#c9705a"},
@@ -981,37 +981,55 @@ const WORLDS = [
     rule:"Scorched ground. Gold flows fast and the war burns hot." },
 ];
 function world(){ return WORLDS[battle().world || 0]; }
+// Levels were varied but not ESCALATING - the campaign was nine one-off
+// skirmishes in random order of difficulty. This scales the horde's war
+// effort per level, underneath whatever global tier the player chose.
+function pressure(){ return battle().pressure || 1; }
+
+// The horde scales with your EMPIRE, not just your hero. Fully kitted, the
+// campaign was 100% winnable on every level at every tier below Marshal:
+// player power was compounding faster than the per-level ramp. Counting
+// everything the player owns is the only lever that tracks the actual cause.
+function hordeResponse(){
+  let n = 0;
+  if(SAVE.hero) n += 2.4;
+  if(SAVE.unlocked.mage) n += 1.2;
+  n += upLvl("keepHp") + upLvl("income") + upLvl("muster");
+  return 1 + n * 0.052;
+}
 
 const BATTLES = [
   // --- I. THE GREEN MARCHES -------------------------------------------
-  { world:0, name:"HOLD THE CROSSING", atmo:0, blocked:[], boss:null,
+  { world:0, name:"HOLD THE CROSSING", pressure:0.86, atmo:0, blocked:[], boss:null,
     objective:{type:"raze"},
     brief:"They came for the ford. Break their camp." },
-  { world:0, name:"THE NARROWS", atmo:1, blocked:[0,4],
+  { world:0, name:"THE NARROWS", pressure:0.95, atmo:1, blocked:[0,4],
     boss:{at:40, hpTrigger:0.45, type:"chieftain"}, objective:{type:"raze"},
     brief:"Marsh closes both flanks. Three lanes only \u2014 and their chieftain waits." },
-  { world:0, name:"THE WARCHIEF", atmo:2, blocked:[],
+  { world:0, name:"THE WARCHIEF", pressure:1.03, atmo:2, blocked:[],
     boss:{at:30, hpTrigger:0.62, type:"warchief"}, objective:{type:"raze"},
     brief:"Their champion walks at you. Spears bring down armour." },
   // --- II. THE FROSTREACH ---------------------------------------------
-  { world:1, name:"THE WHITE MARCH", atmo:3, blocked:[], boss:null,
+  { world:1, name:"THE WHITE MARCH", pressure:1.00, atmo:3, blocked:[], boss:null,
     comp:"swarm", objective:{type:"raze"},
     brief:"They come in numbers across the snow. Numbers, not quality." },
-  { world:1, name:"THE FROZEN FORD", atmo:3, blocked:[2], boss:null,
+  { world:1, name:"THE FROZEN FORD", pressure:1.18, atmo:3, blocked:[2], boss:null,
     comp:"heavy", objective:{type:"hold", count:5, seconds:18},
     brief:"The river splits the field. HOLD five banners for eighteen seconds." },
-  { world:1, name:"THE ICE CHIEFTAIN", atmo:3, blocked:[],
+  { world:1, name:"THE ICE CHIEFTAIN", pressure:1.12, atmo:3, blocked:[],
     boss:{at:34, hpTrigger:0.5, type:"chieftain"}, comp:"heavy",
     objective:{type:"raze"},
     brief:"Their chieftain has wintered here. He is bigger for it." },
   // --- III. THE EMBER WASTE -------------------------------------------
-  { world:2, name:"ASH AND CINDER", atmo:4, blocked:[1,3], boss:null,
+  { world:2, name:"ASH AND CINDER", pressure:1.30, atmo:4, blocked:[1,3],
+    boss:{at:44, hpTrigger:0.40, type:"chieftain"},
     comp:"ranged", objective:{type:"raze"},
     brief:"Lava scars the field. Their shamans hold the high ground." },
-  { world:2, name:"THE LONG SIEGE", atmo:4, blocked:[], boss:null,
-    comp:"swarm", objective:{type:"survive", seconds:70},
+  { world:2, name:"THE LONG SIEGE", pressure:1.36, atmo:4, blocked:[],
+    boss:{at:30, hpTrigger:0.01, type:"chieftain"},
+    comp:"swarm", objective:{type:"survive", seconds:70}, keepMul:0.72,
     brief:"You cannot win this one. SURVIVE seventy seconds." },
-  { world:2, name:"THE WARCHIEF'S PYRE", atmo:4, blocked:[],
+  { world:2, name:"THE WARCHIEF'S PYRE", pressure:1.24, atmo:4, blocked:[],
     boss:{at:26, hpTrigger:0.7, type:"warchief"}, comp:"heavy",
     objective:{type:"raze"},
     brief:"The last of them. Kill the Warchief's host and be done." },
@@ -1027,7 +1045,7 @@ const BATTLES = [
 // 0/17 on EVERY tier — the opening was simply too fast to learn against.
 const DIFF = [
   { name:"RECRUIT", income:0.62, cd:0.46, counterAt:4, laneIQ:0, delay:10,  ramp:28 },
-  { name:"SOLDIER", income:0.82, cd:0.30, counterAt:3, laneIQ:1, delay:6.5, ramp:22 },
+  { name:"SOLDIER", income:0.94, cd:0.26, counterAt:3, laneIQ:1, delay:5.5, ramp:19 },
   { name:"VETERAN", income:1.00, cd:0.18, counterAt:2, laneIQ:2, delay:3.5, ramp:15 },
   { name:"MARSHAL", income:1.10, cd:0.15, counterAt:2, laneIQ:2, delay:2.5, ramp:12 },
 ];
@@ -1072,7 +1090,7 @@ function reset(){
   G.gold=startGold(); G.eGold=60; G.eBrainCd=1.2;
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
   G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
-  const kh = keepMaxHp();
+  const kh = Math.round(keepMaxHp() * (battle().keepMul || 1));
   const ek = (battle().objective||{}).type === "survive" ? 99999 : 520;
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
@@ -1347,9 +1365,10 @@ function goldRate(side){
   // win rate only a little, because none of them price THAT. So the horde
   // musters harder when a champion rides against them - one lever that
   // actually scales with the thing causing the problem.
-  const vsHero = (side < 0 && SAVE.hero) ? 1.18 : 1;
+  const vsHero = side < 0 ? hordeResponse() : 1;
   const wm = world().income;
-  return base * terr * vsHero * wm * (side < 0 ? diff().income * enemyOpening() : incomeMul());
+  const lp = pressure();
+  return base * terr * vsHero * wm * (side < 0 ? diff().income * enemyOpening() * lp : incomeMul());
 }
 
 // Which lane the AI reinforces. At laneIQ 2 it reads the field: shore up the
@@ -1386,7 +1405,8 @@ function enemyBrain(dt){
   G.eBrainCd -= dt;
   if(G.eBrainCd > 0) return;
   const D = diff();
-  G.eBrainCd = D.cd + Math.random()*D.cd*0.8;
+  const pc = D.cd / Math.sqrt(pressure());   // later levels react quicker too
+  G.eBrainCd = pc + Math.random()*pc*0.8;
   let ps=0, pk=0, pa=0, heroOut=false;
   for(const u of G.units){ if(u.dead||u.side!==1) continue;
     if(u.heroCtl){ heroOut = true; continue; }
@@ -1403,7 +1423,7 @@ function enemyBrain(dt){
   else if(ps >= D.counterAt*2){ want = "archer"; commit = true; }
   else {
     const r = Math.random(), comp = battle().comp;
-    if(comp === "swarm")      want = r<0.80 ? "spear"  : r<0.93 ? "knight" : "archer";
+    if(comp === "swarm")      want = r<0.72 ? "spear"  : r<0.90 ? "knight" : "archer";
     else if(comp === "heavy") want = r<0.30 ? "spear"  : r<0.80 ? "knight" : "archer";
     else if(comp === "ranged")want = r<0.34 ? "spear"  : r<0.50 ? "knight" : "archer";
     else                      want = r<0.55 ? "spear"  : r<0.85 ? "knight" : "archer";

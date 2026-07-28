@@ -164,6 +164,17 @@ Two **factions**, not a palette swap: blue-and-steel humans versus a green gobli
 
 **Per-battle atmosphere.** Each battle draws the next sky in rotation — Clear Day, Dusk, Storm (rain and lightning), Deep Winter (snowfall) — via sky/water swaps and a full-field colour wash. Props are baked with fixed colours, so washing is far cheaper than re-baking the scenery every battle.
 
+## The campaign curve
+
+Each level carries a `pressure` scalar that sits *underneath* the global difficulty tier, so level 9 is harder than level 1 whichever tier you picked. And the horde scales with your **empire** — `hordeResponse()` counts your hero, your unlocked units and every upgrade level, and musters accordingly.
+
+⚠️ Both of those exist because measurement found the opposite of what I'd assumed:
+
+- I built nine levels to be *different* and never checked they got *harder*. Swept at two tiers, the campaign was nine one-off skirmishes in random order — level 6 was harder than the finale, level 7 was a free win, level 8's survive objective could not be lost.
+- Fully kitted (hero + mage + five upgrade levels) the campaign was **100% winnable on every level at every tier below Marshal**. Player power compounded faster than any per-level ramp, which is why scaling the horde to the whole empire — rather than to the hero alone — was the only lever that tracked the cause.
+
+⚠️ **The absolute win rates below are a bot's, not a person's.** The harness policy counters perfectly, picks lanes optimally and buys the instant it can afford to. It reads ~100% on the normal tier where a human would not. The *shape* of the curve is trustworthy; the numbers need a human pass.
+
 ## Balance harness
 
 Balance is tested headlessly, not eyeballed. In the console:
