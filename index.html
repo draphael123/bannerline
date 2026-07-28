@@ -70,7 +70,8 @@ try{
 // wipe progress. Must be declared before reset() reads it at boot.
 const SAVE = { campaignVersion:3, progress:1, renown:0, unlocked:{}, upgrades:{},
                won:false, loadout:["spear","knight","archer"], spells:[],
-               unlockedSpells:{}, spellUpgrades:{}, spellSlots:1, unitUpgrades:{} };
+               unlockedSpells:{}, spellUpgrades:{}, spellSlots:1, unitUpgrades:{},
+               endlessBest:0 };
 try{
   const raw = localStorage.getItem("bannerline.save");
   if(raw){
@@ -93,6 +94,7 @@ try{
     SAVE.unlockedSpells=SAVE.unlockedSpells||{};
     for(const k of SAVE.spells) SAVE.unlockedSpells[k]=true;
     SAVE.spellSlots=SAVE.spellSlots||1; SAVE.unitUpgrades=SAVE.unitUpgrades||{};
+    SAVE.endlessBest=SAVE.endlessBest||0;
   }
 }catch(e){}
 function saveGame(){
@@ -102,6 +104,7 @@ function wipeSave(){
   SAVE.campaignVersion=3; SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
   delete SAVE.hero; SAVE.loadout=["spear","knight","archer"]; SAVE.spells=[];
   SAVE.unlockedSpells={}; SAVE.spellUpgrades={}; SAVE.spellSlots=1; SAVE.unitUpgrades={};
+  SAVE.endlessBest=0;
   saveGame();
 }
 const UPGRADES = [
@@ -153,6 +156,7 @@ function saveOpt(){
 const SND = { get muted(){ return OPT.sfx <= 0 && OPT.music <= 0; } };
 let SFXBUS = null, MUSBUS = null;
 let TRACKS = null, TRACK_KEY = "";
+let TRACK_FADE = null;
 function buildRecordedMusic(){
   if(TRACKS) return;
   const make=src=>{
@@ -185,7 +189,8 @@ function unlockAudio(){
 }
 function applyVolumes(){
   if(AC){ SFXBUS.gain.value = OPT.sfx; MUSBUS.gain.value = OPT.music; }
-  if(TRACKS) for(const a of Object.values(TRACKS)) a.volume=Math.min(1,OPT.music*.42);
+  if(TRACKS) for(const [k,a] of Object.entries(TRACKS))
+    a.volume=Math.min(1,OPT.music*.42)*(k===TRACK_KEY?1:0);
 }
 function tone(freq, dur, type, vol, slide, delay, bus){
   if(!AC) return;
@@ -227,11 +232,22 @@ function tickMusic(){
   const wanted=!inBattle ? "menu"
     : (battle().objective||{}).type==="boss" ? "boss"+w : "world"+w;
   if(TRACK_KEY!==wanted){
-    for(const a of Object.values(TRACKS)) a.pause();
-    TRACK_KEY=wanted; TRACKS[wanted].currentTime=0;
+    const old=TRACK_KEY&&TRACKS[TRACK_KEY], next=TRACKS[wanted];
+    TRACK_KEY=wanted; next.currentTime=0; next.volume=0; next.play().catch(()=>{});
+    TRACK_FADE={old,next,t:0};
   }
   const recorded=TRACKS[wanted];
   if(recorded.paused) recorded.play().catch(()=>{});
+  if(TRACK_FADE){
+    TRACK_FADE.t=Math.min(1,TRACK_FADE.t+.035);
+    const v=Math.min(1,OPT.music*.42);
+    TRACK_FADE.next.volume=v*TRACK_FADE.t;
+    if(TRACK_FADE.old) TRACK_FADE.old.volume=v*(1-TRACK_FADE.t);
+    if(TRACK_FADE.t>=1){
+      if(TRACK_FADE.old){ TRACK_FADE.old.pause(); TRACK_FADE.old.currentTime=0; }
+      TRACK_FADE=null;
+    }
+  }
   // The oscillator score remains below as a zero-download fallback for
   // browsers that cannot decode the bundled MP3/OGG tracks.
   if(!recorded.error) return;
@@ -1362,7 +1378,10 @@ function world(){ return WORLDS[battle().world || 0]; }
 // Levels were varied but not ESCALATING - the campaign was nine one-off
 // skirmishes in random order of difficulty. This scales the horde's war
 // effort per level, underneath whatever global tier the player chose.
-function pressure(){ return battle().pressure || 1; }
+function pressure(){
+  if(G.endless) return 0.92 + (G.endlessWave-1)*0.105;
+  return battle().pressure || 1;
+}
 
 // The horde scales with your EMPIRE. Fully kitted, the
 // campaign was 100% winnable on every level at every tier below Marshal:
@@ -1483,6 +1502,7 @@ function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
 
 const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army", beat:0,
+  endless:false, endlessWave:1, endlessWorld:0, endlessNext:35,
   ignorePortrait:false,
   lane:2, laneFlash:0, bossOut:false, holdT:0, geyT:0, geyFire:0,
   objects:[], hazardT:0, hazardRow:2, hazardFire:0, blizzard:0,
@@ -1537,7 +1557,7 @@ function reset(){
   const kh = Math.round(keepMaxHp() * (battle().keepMul || 1));
   const objectiveType = (battle().objective||{}).type;
   const ek = objectiveType === "survive" || objectiveType === "boss" ||
-             objectiveType === "demolish" ? 99999 : 520;
+             objectiveType === "demolish" || objectiveType === "endless" ? 99999 : 520;
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false; G.holdT=0;
@@ -1546,6 +1566,7 @@ function reset(){
   G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
   G.stats={sent:0, spent:0, kills:0, maxFront:50};
+  if(G.endless){ G.endlessWave=1; G.endlessNext=35; G.endlessWorld=0; }
   resetBanners();
   resetBattleObjects();
 }
@@ -1892,8 +1913,26 @@ function enemyBrain(dt){
 
 function update(dt){
   if(G.over){ G.shake *= 0.9; G.flash *= 0.9; stepFx(dt); return; }
+  if(G.endless && G.t>=G.endlessNext){
+    G.endlessWave++;
+    G.endlessNext+=35;
+    // Vertical stages use a different coordinate system, so Endless rotates
+    // through the four horizontal war fronts without teleporting live armies.
+    G.endlessWorld=[0,1,2,4][Math.floor((G.endlessWave-1)/3)%4];
+    G.eGold=Math.min(G.goldMax,G.eGold+8+G.endlessWave*1.5);
+    G.toast="WAVE "+G.endlessWave+" — "+WORLDS[G.endlessWorld].short;
+    G.toastT=2.4; G.flash=.28;
+    tone(196,.18,"sawtooth",.045,1.5);
+    tone(294,.24,"square",.04,1.3,.12);
+    if(G.endlessWave%5===0 && !G.bossOut){
+      const bosses=["overchief","frostroc","ashtyrant","stormroc","stoneking"];
+      const u=spawn(bosses[Math.floor(G.endlessWave/5-1)%bosses.length],-1,nearestOpenLane(2));
+      u.x=88; G.bossOut=true;
+      G.toast="BOSS WAVE "+G.endlessWave; G.toastT=2.8;
+    } else G.bossOut=false;
+  }
   G.t += dt;
-  G.timeLeft = Math.max(0, G.timeLeft - dt);
+  if(!G.endless) G.timeLeft = Math.max(0, G.timeLeft - dt);
   G.gold = Math.min(G.goldMax, G.gold + goldRate(1) * dt);
   for(const k of Object.keys(G.spellCd)) G.spellCd[k]=Math.max(0,G.spellCd[k]-dt);
   G.spellFlash=Math.max(0,G.spellFlash-dt*2.5);
@@ -2303,7 +2342,14 @@ function endGame(title, sub){
   if(G.over) return;
   G.over = {title, sub};
   G.shake = 6;
-  if(title==="VICTORY"){
+  if(G.endless){
+    const score=Math.max(1,G.endlessWave);
+    const reward=Math.min(160,10+score*4);
+    SAVE.endlessBest=Math.max(SAVE.endlessBest||0,score);
+    SAVE.renown+=reward; saveGame();
+    G.over={title:"LINE BROKEN",sub:"wave "+score+"  •  +"+reward+" renown"};
+    [220,185,147].forEach((f,i)=>tone(f,.4,"sawtooth",.045,.7,i*.12));
+  } else if(title==="VICTORY"){
     const first = G.battle >= SAVE.progress;
     SAVE.renown += first ? 120 : 40;                 // replays pay less
     if(first) SAVE.progress = Math.min(BATTLES.length+1, G.battle+1);
@@ -2483,7 +2529,20 @@ const ATMO = [
     skyHi:"#7a3040", skyLo:"#c2543a", water:"#5e2f33",
     wash:{c:"#ff6a2a", a:0.20}, weather:"ash", clouds:"#8a4a44" },
 ];
-function battle(){ return BATTLES[Math.min(Math.max(1,G.battle), BATTLES.length)-1]; }
+const ENDLESS_BATTLE = {
+  world:0,name:"THE UNBROKEN LINE",pressure:1,atmo:0,blocked:[],boss:null,
+  comp:"swarm",objective:{type:"endless"},
+  brief:"Hold the line as the worlds and their armies turn against you."
+};
+function battle(){
+  if(G.endless){
+    ENDLESS_BATTLE.world=G.endlessWorld;
+    ENDLESS_BATTLE.atmo=[0,3,4,2,1][G.endlessWorld];
+    ENDLESS_BATTLE.comp=G.endlessWave%3===0?"heavy":G.endlessWave%3===2?"ranged":"swarm";
+    return ENDLESS_BATTLE;
+  }
+  return BATTLES[Math.min(Math.max(1,G.battle), BATTLES.length)-1];
+}
 function atmo(){ return G.scene==="title" ? ATMO[0] : ATMO[battle().atmo]; }
 function laneOpen(i){ return battle().blocked.indexOf(i) < 0; }
 function nearestOpenLane(i){
@@ -2817,6 +2876,41 @@ function drawBanners(){
       glow(sx(b.x),BAND_TOP+18,28,b.owner>0?"rgba(255,220,80,1)":"rgba(255,80,50,1)",b.pay*0.5);
     }
   }
+}
+
+// Each region carries one unmistakable moving silhouette in the near field.
+// These shapes sit behind combatants: atmosphere without sacrificing targets.
+function drawWorldLife(){
+  const w=world(), t=G.wind;
+  ctx.save(); ctx.globalAlpha=.30;
+  if(w.ice){
+    for(let i=0;i<5;i++){
+      const x=((i*151-t*10)%(W+80))-40;
+      px(x,151+(i%2)*7,34,2,"#eaffff"); px(x+9,148+(i%2)*7,15,2,"#ffffff");
+    }
+  } else if(w.burn){
+    for(let i=0;i<9;i++){
+      const x=(i*79+23)%W,y=154+Math.sin(t*2+i)*5;
+      glow(x,y,18,"rgba(255,106,42,1)",.35);
+      px(x,y,2,5,i%2?"#ffb13b":"#ff6a2a");
+    }
+  } else if(w.vertical){
+    for(let i=0;i<4;i++){
+      const x=((i*173+t*14)%(W+70))-35,y=112+i*12;
+      px(x,y,27,3,"#eef7ef"); px(x+7,y-4,14,4,"#ffffff");
+    }
+  } else if(w.elevation){
+    for(let i=0;i<7;i++){
+      const x=i*104-18, h=18+(i%3)*8;
+      px(x,170-h,55,h,"#4e5349"); px(x+8,166-h,38,4,"#8f967e");
+    }
+  } else {
+    for(let i=0;i<8;i++){
+      const x=(i*93+Math.sin(t+i)*7)%W;
+      px(x,157,2,10,"#315c3d"); px(x-3,156+Math.sin(t*3+i)*2,7,2,"#8bcf75");
+    }
+  }
+  ctx.restore();
 }
 function laneAtX(pxv){
   let best=0,bd=1e9;
@@ -3496,6 +3590,9 @@ function drawHUD(){
     line=(battle().mechanic==="drums"?"SILENCE THE WAR DRUMS   "
       :battle().mechanic==="gates"?"BREAK THE MOUNTAIN GATES   ":"QUENCH THE WAR PYRES   ")+left+" LEFT";
     dc=left===1?"#a8ffd8":"#ffd0a0";
+  } else if(obj.type === "endless"){
+    line="WAVE "+G.endlessWave+"   •   NEXT "+Math.max(0,Math.ceil(G.endlessNext-G.t))+"s";
+    dc=G.endlessWave%5===0?"#ffcf85":"#a8ffd8";
   } else {
     const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "HOLDING";
     line = "FRONT LINE: "+dir;
@@ -3520,13 +3617,14 @@ function drawHUD(){
   // this corner used to hold the game's own name, which the player already
   // knows. It now holds the thing they most need: which battle, and where.
   panel(8, 6, 210, 20, P.panel, P.panelD, P.panelL, 2);
-  txt(roman(G.battle)+".", 16, 20, 10, "#ffd75e", "left");
+  txt(G.endless?"∞":roman(G.battle)+".", 16, 20, 10, "#ffd75e", "left");
   txt(battle().name.slice(0,25), 32, 20, 8, P.cream, "left", false);
 
-  const m = Math.floor(G.timeLeft/60), s = Math.floor(G.timeLeft%60);
+  const clock=G.endless?G.t:G.timeLeft;
+  const m = Math.floor(clock/60), s = Math.floor(clock%60);
   panel(W-114, 6, 74, 20, P.panel, P.panelD, P.panelL, 2);
-  txt(m+":"+String(s).padStart(2,"0"), W-77, 20, 11,
-      G.timeLeft<30 ? "#ff9a80" : P.cream, "center");
+  txt((G.endless?"+":"")+m+":"+String(s).padStart(2,"0"), W-77, 20, 11,
+      !G.endless&&G.timeLeft<30 ? "#ff9a80" : P.cream, "center");
 
   panel(SPEED_BTN.x, SPEED_BTN.y, SPEED_BTN.w, SPEED_BTN.h,
         G.speed>1?"#7a5a2a":P.panel, P.panelD, P.panelL, 2);
@@ -3763,15 +3861,22 @@ function drawBattlefield(){
   if(world().vertical){ drawVerticalBattlefield(); return; }
   ctx.save();
   if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
-  drawSky(); drawBirds(); drawWater(); drawFarBank();
+  drawSky(); drawBirds(); drawWater(); drawFarBank(); drawWorldLife();
   drawTerritory(); drawBattleLandmark(); drawLanes(); drawBanners(); drawBattleObjects();
   drawKeep(G.keepP, 1);
-  if(!["boss","demolish"].includes((battle().objective||{}).type)) drawKeep(G.keepE, -1);
+  if(!["boss","demolish","endless"].includes((battle().objective||{}).type)) drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
   // depth-sort the living and the dying together so falling bodies stay in rank
   const cast = G.units.map(u=>({y:u.y, u})).concat(G.dying.map(d=>({y:d.y, d})));
   cast.sort((a,b)=>a.y-b.y);
-  for(const e of cast){ if(e.u) drawUnit(e.u); else drawDying(e.d); }
+  for(const e of cast){
+    if(e.u){
+      const x=sx(e.u.x), y=GROUND_Y+e.u.y;
+      ctx.globalAlpha=.22; ctx.fillStyle="#0b0a0c"; ctx.beginPath();
+      ctx.ellipse(x,y-1,10,3,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+      drawUnit(e.u);
+    } else drawDying(e.d);
+  }
   for(const st of G.stuck) drawStuckArrow(st);
   if(G.balShot){
     const b = G.balShot, t = Math.min(1, b.t/b.dur);
@@ -4271,13 +4376,14 @@ function drawOpening(){
 
 const HOME_BTN = [
   {id:"CAMPAIGN", label:"CAMPAIGN"},
+  {id:"ENDLESS",  label:"ENDLESS"},
   {id:"BESTIARY", label:"BESTIARY"},
   {id:"OPTIONS",  label:"SETTINGS"},
 ];
-function homeBtn(i){ return {x:W/2-92, y:150+i*32, w:184, h:27}; }
-const HOME_DL = {x:W/2-118, y:250, w:22, h:22};
-const HOME_DV = {x:W/2-92,  y:250, w:184, h:22};
-const HOME_DR = {x:W/2+96,  y:250, w:22, h:22};
+function homeBtn(i){ return {x:W/2-92, y:140+i*29, w:184, h:24}; }
+const HOME_DL = {x:W/2-118, y:258, w:22, h:22};
+const HOME_DV = {x:W/2-92,  y:258, w:184, h:22};
+const HOME_DR = {x:W/2+96,  y:258, w:22, h:22};
 
 // A home screen should be a place, not a match already in progress. Static
 // scene, no simulation running behind the menu.
@@ -4339,6 +4445,8 @@ function drawTitle(){
         W/2, 240, 8, "#9fd6bd", "center", false);
   else if(SAVE.won)
     txt("campaign complete", W/2, 240, 8, "#a8ffd8", "center", false);
+  if(SAVE.endlessBest)
+    txt("endless best  •  wave "+SAVE.endlessBest, W/2, 289, 7, "#d7c18b", "center", false);
 
   mbtn({...HOME_DL, label:"<"}, hoverMenu==="TD-");
   panel(HOME_DV.x, HOME_DV.y, HOME_DV.w, HOME_DV.h, "#33261a", P.panelD, P.panelL, 2);
@@ -4446,7 +4554,7 @@ function drawIntro(){
   px(0,258,W,2,"rgba(255,215,94,0.35)");
   ribbon(W/2-120+ox, 126, 240, 24, "#3d4a56", "#232d36", "#5d6b78");
   const bt = battle(), ob = bt.objective || {type:"raze"};
-  txt("BATTLE "+roman(G.battle), W/2+ox, 138, 15, "#ffd75e", "center");
+  txt(G.endless?"ENDLESS MUSTER":"BATTLE "+roman(G.battle), W/2+ox, 138, 15, "#ffd75e", "center");
   txt(bt.name, W/2+ox, 160, 13, "#eef4f7", "center");
   txt(world().name + "   \u2022   " + diff().name, W/2+ox, 175, 8, "#b9c6cf", "center");
   txt(bt.brief, W/2+ox, 191, 7, "#b9c6cf", "center", false);
@@ -4455,6 +4563,7 @@ function drawIntro(){
              : ob.type==="survive" ? "SURVIVE "+ob.seconds+" SECONDS"
              : ob.type==="boss"    ? "SLAY THE BOSS"
              : ob.type==="demolish"? "DESTROY ALL "+ob.count+" TARGETS"
+             : ob.type==="endless" ? "SURVIVE AS MANY WAVES AS YOU CAN"
              :                       "RAZE THEIR KEEP";
   ribbon(W/2-92+ox, 200, 184, 17, "#3d4a56", "#232d36", "#5d6b78");
   txt(goal, W/2+ox, 212, 9, "#a8ffd8", "center");
@@ -4494,8 +4603,11 @@ function drawResult(){
     ["UNITS SENT",    G.stats.sent],
     ["GOLD SPENT",    G.stats.spent],
     ["ENEMIES SLAIN", G.stats.kills],
-    ["RENOWN",        (G.over&&G.over.title==="VICTORY")?"+"+(G.battle>=SAVE.progress-1?120:40):"0"],
-    ["KEEP REMAINING", Math.ceil(G.keepP.hp)+" vs "+Math.ceil(G.keepE.hp)],
+    ["RENOWN",        G.endless ? "+"+Math.min(160,10+G.endlessWave*4)
+                      :(G.over&&G.over.title==="VICTORY")?"+"+(G.battle>=SAVE.progress-1?120:40):"0"],
+    [G.endless?"TIME HELD":"KEEP REMAINING",
+      G.endless ? Math.floor(G.t/60)+":"+String(Math.floor(G.t%60)).padStart(2,"0")
+                :Math.ceil(G.keepP.hp)+" vs "+Math.ceil(G.keepE.hp)],
   ];
   rows.forEach((r,i)=>{
     const y = 146 + i*14;
@@ -4563,7 +4675,7 @@ function startBattle(){
   unlockAudio();
   G.started = true;
   reset();
-  if(!OPT.tutorialDone) tutStart();      // first ever battle is guided
+  if(!OPT.tutorialDone && !G.endless) tutStart(); // campaign teaches keeps and objectives
   G.speed = OPT.fastDefault ? 1 : .5;
   G.overlay = null;
   G.scene = "intro"; G.sceneT = 0;
@@ -4645,14 +4757,19 @@ cv.addEventListener("pointerdown", e=>{
       if(!inBox(p, homeBtn(i))) continue;
       unlockAudio(); tone(620,0.08,"square",0.05,1.3);
       const id = HOME_BTN[i].id;
-      if(id==="CAMPAIGN")      { G.scene="map"; G.sceneT=0; }
+      if(id==="CAMPAIGN")      { G.endless=false; G.scene="map"; G.sceneT=0; }
+      else if(id==="ENDLESS")  { startEndless(); }
       else if(id==="BESTIARY") { G.scene="bestiary"; G.sceneT=0; }
       else                     { G.overlay="settings"; }
       return;
     }
     return;                                  // menu, not a start button
   }
-  if(G.scene==="result"){ G.scene="map"; G.sceneT=0; return; }
+  if(G.scene==="result"){
+    if(G.endless){ G.endless=false; G.scene="title"; }
+    else G.scene="map";
+    G.sceneT=0; return;
+  }
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; return; }
   for(let i=0;i<2;i++) if(inBox(p,spellBtn(i))){
     const key=equippedSpells()[i]; if(key) castSpell(key); return;
@@ -4692,7 +4809,12 @@ addEventListener("keydown", e=>{
     else { OPT.music=OPT._m??0.7; OPT.sfx=OPT._s??0.8; }
     applyVolumes(); saveOpt();
   }
-  else if(k==="r"){ if(G.scene==="result"){ G.scene="map"; G.sceneT=0; } else startBattle(); }
+  else if(k==="r"){
+    if(G.scene==="result"){
+      if(G.endless){ G.endless=false; G.scene="title"; } else G.scene="map";
+      G.sceneT=0;
+    } else startBattle();
+  }
   else if(k==="p" || k==="escape"){
     if(G.tut.on && !G.overlay){ tutFinish(); e.preventDefault(); return; }
     if(G.overlay==="settings") G.overlay="pause";
@@ -4776,6 +4898,11 @@ if(location.hostname==="127.0.0.1" || location.hostname==="localhost"){
     G.scene=previewScene; G.sceneT=0;
     if(previewScene==="shop") G.shopTab=previewParams.get("tab")||"army";
   }
+  if(previewParams.get("endless")==="1") startEndless();
+}
+function startEndless(){
+  G.endless=true; G.battle=1;
+  startBattle();
 }
 requestAnimationFrame(frame);
 setInterval(()=>{ const now=performance.now(); if(now-last > 220) step(now); }, 100);
@@ -4789,7 +4916,7 @@ window.__bannerline = {
   setDiff(v){ OPT.difficulty = v; }, getDiff(){ return DIFF[OPT.difficulty].name; },
   tutStart, tutStep, tutFinish, TUT,
   SAVE, saveGame, wipeSave, UPGRADES, SPELLS, UNIT_TRAINING, roster, BATTLES,
-  ownedUnits, LOADOUT_MAX, castSpell, cycleSpeed,
+  ownedUnits, LOADOUT_MAX, castSpell, cycleSpeed, startEndless,
   sim(seconds, policy){
     reset();
     const dt = 1/30;

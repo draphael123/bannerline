@@ -10,7 +10,7 @@ A 2D pixel-art **lane pusher** — not tower defense. Knights of a river keep ag
 |---|---|
 | `1` / `2` / `3` or click | Buy Spearman / Knight / Archer |
 | `↑` `↓` or click the field | Choose the deployment lane |
-| `S` | Toggle 1× / 2× speed |
+| `S` | Cycle 0.5× / 1× / 2× / 4× speed |
 | `Esc` / `P` / gear icon | Pause & settings |
 | `M` | Mute everything |
 | `R` | Restart |
@@ -76,6 +76,15 @@ Levels differ by more than scenery, which was the actual reason they felt samey:
 - **Boss** — each world ends with a no-castle boss battle: the
   **Overchieftain** calls guards, the airborne **White Terror** changes lanes,
   and the **Ash Tyrant** periodically burns troops around it.
+
+## Endless
+
+Endless mode is available directly from the title screen and uses the player's
+current warband, spells, training, and castle upgrades. A new wave arrives every
+35 seconds, enemy pressure grows continuously, and every fifth wave brings back
+a regional boss. The battlefield rotates through the four horizontal world
+fronts every three waves, with their unique palette, weather, music, and ambient
+motion. A run awards renown and permanently records the highest wave reached.
 
 ## Lanes
 
@@ -215,7 +224,13 @@ than relying on palette changes alone.
 
 **Combat reads in motion.** Units topple and fall rather than vanishing, pivoting at the feet away from the blow. Melee swings draw an arc with a spark at the point of impact, cleaves get a bigger, hotter one, and arrows stick in their target for a moment.
 
-**A living field.** Drop shadows on every unit, prop and keep; banded vertical shading plus a warm sun band; trees, bushes and banners swaying on individual phases via baked lean frames so the treeline never pulses in unison; birds, drifting leaves, churned earth and a dust haze over the clash. All of it is a pure function of a render-only `wind` clock, so ambient life costs the simulation nothing.
+**A living field.** Stronger contact shadows separate units from the ground.
+Each world also carries a signature moving foreground layer: Marches reeds,
+Frostreach ice streaks, Ember sparks, Skyward clouds, and Crown Range terraces.
+Trees, bushes and banners sway on individual phases; birds, drifting leaves,
+churned earth and a dust haze keep the field moving. All of it is a pure
+function of a render-only `wind` clock, so ambient life costs the simulation
+nothing.
 
 **Emissive light.** Nothing in the scene emitted light before — fire, gold and sparks were just coloured squares. Bright sources (shaman flames, gate torches, impact sparks, the front-line seam, lightning, a burning keep) now queue additive glows composited in a single pass, so overlapping sources stack the way real light does.
 
