@@ -68,7 +68,7 @@ try{
 }catch(e){}
 // Campaign save, separate from display options so wiping settings doesn't
 // wipe progress. Must be declared before reset() reads it at boot.
-const SAVE = { progress:1, renown:0, unlocked:{}, upgrades:{}, won:false };
+const SAVE = { progress:1, renown:0, unlocked:{}, upgrades:{}, won:false, hero:null };
 try{
   const raw = localStorage.getItem("bannerline.save");
   if(raw) Object.assign(SAVE, JSON.parse(raw));
@@ -78,6 +78,7 @@ function saveGame(){
 }
 function wipeSave(){
   SAVE.progress=1; SAVE.renown=0; SAVE.unlocked={}; SAVE.upgrades={}; SAVE.won=false;
+  SAVE.hero=null;
   saveGame();
 }
 const UPGRADES = [
@@ -375,6 +376,60 @@ function artMage(c, K, frame){
   if(atk){ R(c, stx-9, 15+B, 7, 7, ORB); R(c, stx-8, 16+B, 5, 5, "#d8fbff"); }
 }
 
+function artCaptain(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  const CAPE="#a8332c", CAPED="#6e1d18";
+  c.save(); c.translate(0, 8);
+  // legs
+  R(c, 11, 34+g[0], 6, 10-g[0], P.steelD); R(c, 18, 34+g[1], 6, 10-g[1], P.steelD);
+  R(c, 11, 34+g[0], 2, 10-g[0], P.steel);
+  R(c, 10, 42+g[0], 8, 3, P.ink);          R(c, 18, 42+g[1], 8, 3, P.ink);
+  // cape behind
+  R(c, 4, 16+B, 8, 26, CAPED);
+  R(c, 5, 16+B, 6, 22, CAPE);
+  R(c, 4, 40+B, 9, 4, CAPED);
+  // banner pole over the shoulder
+  R(c, 27, -6+B, 3, 44, P.wood);
+  R(c, 26, -10+B, 5, 5, P.gold);
+  R(c, 15, -6+B, 13, 14, K.m);
+  R(c, 15, -6+B, 13, 3, K.l);
+  R(c, 15, 5+B, 13, 3, K.d);
+  R(c, 19, -2+B, 5, 7, K.l);
+  R(c, 15, 8+B, 4, 5, K.m); R(c, 23, 8+B, 4, 5, K.m);
+  // body
+  R(c, 8, 18+B, 19, 19, K.m);
+  R(c, 8, 18+B, 19, 3, K.l);
+  R(c, 8, 21+B, 2, 16, K.l);
+  R(c, 25, 21+B, 2, 16, K.d);
+  R(c, 8, 32+B, 19, 3, K.d);
+  R(c, 8, 30+B, 19, 3, P.gold);            // sash
+  R(c, 14, 21+B, 7, 10, K.l);
+  R(c, 16, 23+B, 3, 5, P.gold);
+  // pauldrons
+  R(c, 5, 17+B, 6, 7, P.steel); R(c, 5, 17+B, 6, 2, "#e8edf5");
+  R(c, 24, 17+B, 6, 7, P.steel);
+  // plumed helm
+  R(c, 10, 5+B, 15, 14, P.steel);
+  R(c, 10, 5+B, 15, 3, "#e8edf5");
+  R(c, 10, 8+B, 2, 11, "#e8edf5");
+  R(c, 23, 8+B, 2, 11, P.steelD);
+  R(c, 10, 16+B, 15, 3, P.steelD);
+  R(c, 13, 10+B, 10, 3, P.ink);
+  R(c, 13, 13+B, 10, 1, P.steelD);
+  R(c, 14, -3+B, 6, 10, "#e8b53a");        // gold crest
+  R(c, 15, -6+B, 4, 5, "#ffd75e");
+  // sword
+  if(atk){
+    R(c, 26, 14+B, 4, 20, P.steel); R(c, 27, 16+B, 2, 16, "#e8edf5");
+    R(c, 24, 32+B, 9, 3, P.gold);
+  } else {
+    R(c, 2, 22+B, 4, 20, P.steel);  R(c, 3, 24+B, 2, 16, "#e8edf5");
+    R(c, 0, 40+B, 8, 3, P.gold);
+  }
+  c.restore();
+}
+
 function artGobSpear(c, K, frame){
   const atk = frame===4, g = GAIT[atk?0:frame];
   const B = atk ? 0 : g[2];
@@ -564,19 +619,19 @@ function artWarchief(c, K, frame){
 
 const UNIT_ART = {
   "1":  { spear:artSpear,     knight:artKnight,    archer:artArcher,
-          mage:artMage        },
+          mage:artMage,       captain:artCaptain  },
   "-1": { spear:artGobSpear,  knight:artGobBrute,  archer:artGobShaman,
           warchief:artWarchief },
 };
 const UNIT_BOX = {
   "1":  { spear:{w:30,h:40}, knight:{w:27,h:47}, archer:{w:26,h:40},
-          mage:{w:32,h:44} },
+          mage:{w:32,h:44},  captain:{w:34,h:56} },
   "-1": { spear:{w:30,h:38}, knight:{w:36,h:47}, archer:{w:30,h:48},
           warchief:{w:48,h:62} },
 };
 const SPR = {};                               // SPR[type][side][frame] / .flash
 function bakeUnits(){
-  for(const type of ROSTER_ALL.concat(['warchief'])){
+  for(const type of ROSTER_ALL.concat(['warchief','captain'])){
     SPR[type] = {};
     for(const side of [1,-1]){
       const K = colsFor(side), art = UNIT_ART[side][type], box = UNIT_BOX[side][type];
@@ -824,6 +879,17 @@ const TYPES = {
     ranged:true, laneSpill:2, aoe:7.5,
     beats:"CROWDS", hint:"Hits every lane. Paper.",
   },
+  captain: {
+    // NOTE: stat nerfs do not close the MARSHAL gap (53% -> 88% with a
+    // hero). The power is in being a permanent free body that respawns
+    // and can plug any lane, not in its numbers. The real answer is an
+    // enemy champion at the top tiers, not more nerfing - so these are
+    // set to the values that FEEL right rather than chasing the curve.
+    key:"captain", name:"STANDARD-BEARER", cost:0, hp:330, speed:4.2,
+    reach:3.0, dmg:12, rate:0.95, cls:"heavy", laneSpill:1, bigTarget:true,
+    hero:true, ability:"RALLY", abilityCd:26, respawn:18,
+    beats:"DESPAIR", hint:"Holds a lane. Rallies the line.",
+  },
   warchief: {
     key:"warchief", name:"WARCHIEF", cost:0, hp:1050, speed:2.6,
     reach:3.4, dmg:26, rate:1.45, cls:"heavy",
@@ -831,6 +897,13 @@ const TYPES = {
     boss:true, beats:"THE UNREADY", hint:"Massed spears bring it down",
   },
 };
+// Heroes are a separate axis from the buyable roster: one is on the field at
+// all times once unlocked, you steer it, and it has an ability. Built as a
+// list from the start because more are coming.
+const HEROES = [
+  { key:"captain", name:"STANDARD-BEARER", cost:260,
+    blurb:"Anchors whichever lane you select. RALLY hastens and shields the line around him." },
+];
 const ROSTER_ALL = ["spear","knight","archer","mage"];
 const ORDER = ["spear","knight","archer"];
 // The buyable roster grows as you unlock. Everything is baked at boot; only
@@ -875,9 +948,10 @@ function enemyOpening(){
 function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
 
 const G = {
-  scene:"title", sceneT:0, overlay:null, battle:1, started:false,
+  scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army",
   ignorePortrait:false,
   lane:2, laneFlash:0, bossOut:false,
+  hero:null, heroCd:0, heroDead:0, rallyFx:0,
   tut:{on:false, i:0, t:0, laneMoved:false},
   t:0, over:null, speed:1, paused:false,
   gold:60, goldMax:240,
@@ -892,6 +966,10 @@ const G = {
   stats:{sent:0, spent:0, kills:0, maxFront:50},
 };
 
+// Declared up here because the boot-time reset() reaches spawn() through
+// spawnHero() when a hero is already owned — same TDZ trap as BATTLES.
+let UID = 1;
+
 const BANNER_X = [14, 28, 42, 58, 72, 86];
 function resetBanners(){ G.banners = BANNER_X.map(x => ({x, owner:x<50?1:-1, pop:0})); }
 
@@ -904,6 +982,7 @@ function reset(){
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:400,max:400,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false;
+  G.hero=null; G.heroCd=0; G.heroDead=0; G.rallyFx=0;
   G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
   G.stats={sent:0, spent:0, kills:0, maxFront:50};
@@ -928,7 +1007,6 @@ function pickRow(side){
   return best;
 }
 
-let UID = 1;
 function spawn(typeKey, side, row){
   const T = TYPES[typeKey];
   const r = nearestOpenLane(row===undefined ? pickRow(side) : row);
@@ -945,6 +1023,65 @@ function spawn(typeKey, side, row){
   };
   G.units.push(u);
   return u;
+}
+
+// The hero is a normal unit in every system (combat, rendering, depth) with
+// a `heroCtl` flag on top — that keeps it out of special cases everywhere.
+function spawnHero(){
+  const h = spawn(SAVE.hero, 1, G.lane);
+  h.heroCtl = true; h.pop = 1;
+  h.laneStep = 0;
+  G.hero = h;
+  return h;
+}
+
+function heroTick(dt){
+  if(!SAVE.hero) return;
+  G.heroCd = Math.max(0, G.heroCd - dt);
+  G.rallyFx = Math.max(0, G.rallyFx - dt);
+  if(G.hero && G.hero.dead) G.hero = null;
+  if(!G.hero){
+    if(G.heroDead <= 0) G.heroDead = TYPES[SAVE.hero].respawn;
+    G.heroDead -= dt;
+    if(G.heroDead <= 0){ spawnHero(); G.heroDead = 0; }
+    return;
+  }
+  // It WALKS to the selected lane rather than teleporting, so switching
+  // lanes costs a few seconds of being out of position.
+  const h = G.hero;
+  if(h.row !== G.lane){
+    h.laneStep += dt;
+    if(h.laneStep >= 0.55){
+      h.laneStep = 0;
+      h.row += h.row < G.lane ? 1 : -1;
+      h.row = nearestOpenLane(h.row);
+    }
+  } else h.laneStep = 0;
+  const wantY = ROW_Y[h.row];
+  h.y += (wantY - h.y) * Math.min(1, dt*5);
+}
+
+function heroAbility(){
+  if(!SAVE.hero || !G.hero || G.heroCd > 0) return false;
+  const T = TYPES[SAVE.hero];
+  G.heroCd = T.abilityCd;
+  G.rallyFx = 0.9;
+  const h = G.hero;
+  let n = 0;
+  for(const u of G.units){
+    if(u.dead || u.side < 0) continue;
+    if(Math.abs(u.x - h.x) > 22) continue;
+    u.rallyT = 4.0; n++;
+  }
+  G.rings.push({x:h.x, y:h.y-16, r:6, life:0.5, c:"#ffd75e"});
+  G.rings.push({x:h.x, y:h.y-8,  r:3, life:0.45, c:"#fff3c8"});
+  G.shake = Math.max(G.shake, 2.2);
+  for(let i=0;i<18;i++) G.parts.push({
+    x:h.x, y:h.y-14, vx:(Math.random()*2-1)*40, vy:-Math.random()*70-10,
+    life:0.5+Math.random()*0.4, c:i%2?"#ffd75e":"#fff3c8", s:2 });
+  [523,659,784].forEach((f,i)=> tone(f,0.2,"square",0.05,1.3,i*0.06));
+  G.toast = "RALLY!  ("+n+")"; G.toastT = 1.2;
+  return true;
 }
 
 function tryBuy(typeKey){
@@ -1029,18 +1166,20 @@ function frontFriend(u){
 
 function attack(u, target){
   const T = u.T;
-  u.cd = T.rate; u.atkAnim = 0.24;
+  const rally = u.rallyT > 0;
+  u.cd = rally ? T.rate/1.45 : T.rate;
+  u.atkAnim = 0.24;
   if(T.ranged){
     G.shots.push({
       x:u.x, y:u.y-18, tx:target.x, ty:target.y-14, side:u.side,
       t:0, dur: Math.max(0.16, Math.abs(target.x-u.x)*0.015),
-      dmg: T.dmg * ((T.bonus && T.bonus[target.T.cls]) || 1),
+      dmg: T.dmg * ((T.bonus && T.bonus[target.T.cls]) || 1) * (rally?1.15:1),
       src:"arrow", target, aoe:T.aoe||0, row:target.row,
     });
     tone(T.aoe ? 300 : 900, 0.05, T.aoe?"sawtooth":"triangle", 0.022, T.aoe?1.8:0.6);
     return;
   }
-  const mult = (T.bonus && T.bonus[target.T.cls]) || 1;
+  const mult = ((T.bonus && T.bonus[target.T.cls]) || 1) * (rally ? 1.15 : 1);
   G.slashes.push({ x:(u.x+target.x)/2, y:(u.y+target.y)/2 - 14, row:u.row,
                    side:u.side, big:!!T.cleave, t:0 });
   damage(target, T.dmg * mult, "melee");
@@ -1177,6 +1316,7 @@ function update(dt){
     const T = u.T;
     u.cd -= dt;
     u.flash = Math.max(0, u.flash - dt);
+    if(u.rallyT) u.rallyT = Math.max(0, u.rallyT - dt);
     u.atkAnim = Math.max(0, u.atkAnim - dt);
     u.pop = Math.max(0, u.pop - dt*3.2);
     u.bob += dt*9;
@@ -1871,6 +2011,14 @@ function drawUnit(u){
   // emissive bits
   if(u.type === "archer" && u.side < 0)
     glow(x + u.side*-11*k, y - dh + 7*k, 13*k, "rgba(255,150,40,1)", 0.40);
+  if(u.heroCtl){
+    glow(x, y - dh*0.55, 30*k, "rgba(255,215,94,1)", 0.30 + G.rallyFx*0.5);
+    for(let i=0;i<3;i++){                       // marker chevrons above
+      const o = Math.sin(G.wind*3 + i)*1.5;
+      px(x-4+i*3, y-dh-8+o, 2, 4, "#ffd75e");
+    }
+  }
+  if(u.rallyT > 0) glow(x, y - dh*0.4, 13*k, "rgba(255,215,94,1)", 0.34);
   if(u.type === "mage")
     glow(x + u.side*12*k, y - dh + 6*k, 16*k, "rgba(130,225,255,1)", 0.5);
   if(u.type === "warchief")
@@ -2009,7 +2157,8 @@ function cardRect(i){
   const n = roster().length;
   const CW = cardW();
   const total = n*CW + (n-1)*CARD_GAP;
-  return { x:(W-total)/2 + i*(CW+CARD_GAP), y:CARD_Y, w:CW, h:CARD_H };
+  const off = SAVE.hero ? 30 : 0;      // make room for the hero button
+  return { x:(W-total)/2 + off + i*(CW+CARD_GAP), y:CARD_Y, w:CW, h:CARD_H };
 }
 const SPEED_BTN = {x:W/2-26, y:6, w:52, h:20};
 const GEAR_BTN  = {x:W-34, y:6, w:26, h:20};
@@ -2153,8 +2302,31 @@ function drawTray(){
   for(let x=0;x<W;x+=16) px(x+((x/16)%2)*4, 356, 10, 2, "#2f2216");
 }
 
+const HERO_BTN = {x:8, y:CARD_Y, w:58, h:CARD_H};
+function drawHeroButton(){
+  if(!SAVE.hero) return;
+  const T = TYPES[SAVE.hero];
+  const ready = G.hero && G.heroCd <= 0;
+  const frac = 1 - (G.heroCd / T.abilityCd);
+  panel(HERO_BTN.x, HERO_BTN.y, HERO_BTN.w, HERO_BTN.h,
+        ready ? (hoverMenu==="HERO"?"#8a6a2a":"#5d4630") : "#3a3128",
+        ready ? "#c9a227" : P.panelD, ready ? P.goldL : null, 2);
+  if(!G.hero){
+    txt("DOWN", HERO_BTN.x+HERO_BTN.w/2, HERO_BTN.y+16, 8, "#e8574a", "center", false);
+    txt(Math.ceil(G.heroDead)+"s", HERO_BTN.x+HERO_BTN.w/2, HERO_BTN.y+29, 10, "#b0a48c", "center", false);
+    return;
+  }
+  txt(T.ability, HERO_BTN.x+HERO_BTN.w/2, HERO_BTN.y+14, 8,
+      ready?"#ffe9a8":"#8a8070", "center", false);
+  capsule(HERO_BTN.x+6, HERO_BTN.y+19, HERO_BTN.w-12, 7, Math.min(1,frac),
+          ready?P.gold:"#6a5a44", P.goldL);
+  txt(ready?"[SPACE]":Math.ceil(G.heroCd)+"s", HERO_BTN.x+HERO_BTN.w/2,
+      HERO_BTN.y+35, 7, ready?"#ffe9a8":"#8a8070", "center", false);
+}
+
 function drawHUD(){
   drawTray();
+  drawHeroButton();
 
   // gold capsule — sits ABOVE the cards, never behind them
   const gx = 52, gw = W-196;
@@ -2472,9 +2644,46 @@ function drawMap(){
 }
 
 const SHOP_BACK = {x:W/2-70, y:312, w:140, h:26};
+const SHOP_TABS = [{id:"army", label:"ARMY"}, {id:"heroes", label:"HEROES"}];
+function shopTab(i){ return {x:W/2-152+i*152, y:66, w:144, h:22}; }
+function heroRows(){
+  return HEROES.map((h,i)=>({
+    ...h, owned: SAVE.hero === h.key, y:110+i*72,
+    x:W/2-190, w:380, h:64,
+    buy:{x:W/2+96, y:110+i*72+20, w:86, h:24},
+  }));
+}
+function drawShopHeroes(){
+  txt("one hero marches with you, always", W/2, 100, 8, "#b0a48c", "center", false);
+  for(const h of heroRows()){
+    const T = TYPES[h.key];
+    const afford = SAVE.renown >= h.cost;
+    panel(h.x, h.y, h.w, h.h, h.owned?"#2f4a3a":"#33261a", P.panelD, P.panelL, 2);
+    const S = SPR[h.key][1];
+    const sc = Math.min(46/S.w, 58/S.h);
+    ctx.drawImage(S.frames[0], h.x+8, h.y+h.h-4-Math.round(S.h*sc),
+                  Math.round(S.w*sc), Math.round(S.h*sc));
+    txt(h.name, h.x+62, h.y+18, 10, h.owned?"#a8ffd8":"#ffe9a8", "left", false);
+    ctx.font='7px "Courier New",monospace'; ctx.textAlign="left";
+    ctx.fillStyle="#b0a48c";
+    ctx.fillText(h.blurb.slice(0,54), h.x+62, h.y+31);
+    ctx.fillText(h.blurb.slice(54), h.x+62, h.y+41);
+    ctx.fillStyle="#8a7350";
+    ctx.fillText("HP "+T.hp+"    DMG "+T.dmg+"    ability every "+T.abilityCd+"s",
+                 h.x+62, h.y+55);
+    if(h.owned) txt("MARCHING", h.buy.x+h.buy.w/2, h.buy.y+16, 9, "#7fd6bd", "center", false);
+    else {
+      panel(h.buy.x, h.buy.y, h.buy.w, h.buy.h,
+            afford?(hoverMenu==="HERO"+h.key?"#7a5a2a":"#4a3a2a"):"#3a3128",
+            P.panelD, afford?P.goldL:null, 2);
+      txt(h.cost, h.buy.x+h.buy.w/2, h.buy.y+16, 10,
+          afford?"#ffe9a8":"#6a6153", "center", false);
+    }
+  }
+}
 function shopRows(){
   const rows=[];
-  const y0=96, rh=42;
+  const y0=104, rh=42;
   if(!SAVE.unlocked.mage)
     // Priced to be exactly affordable on the first clear (120 renown) - the
     // mage is meant to be the reward for finishing battle I, and at 200 it
@@ -2492,9 +2701,15 @@ function shopRows(){
 function drawShop(){
   px(0,0,W,H,"#2a2118");
   for(let y=0;y<H;y+=4) for(let x=((y/4)%2)*4;x<W;x+=8) px(x,y,4,4,"#3a2e1f");
-  txt("THE QUARTERMASTER", W/2, 48, 17, "#ffd75e", "center");
-  ctx.drawImage(coinImg, W/2-58, 60);
-  txt(SAVE.renown+"  renown", W/2+2, 70, 10, "#ffe9a8", "center");
+  txt("THE QUARTERMASTER", W/2, 38, 16, "#ffd75e", "center");
+  ctx.drawImage(coinImg, W/2-58, 46);
+  txt(SAVE.renown+"  renown", W/2+2, 56, 10, "#ffe9a8", "center");
+  SHOP_TABS.forEach((t,i)=>{
+    const r = shopTab(i), on = G.shopTab === t.id;
+    panel(r.x, r.y, r.w, r.h, on?"#7a5a2a":"#33261a", P.panelD, on?P.goldL:null, 2);
+    txt(t.label, r.x+r.w/2, r.y+15, 10, on?"#ffe9a8":"#9a8f7c", "center", false);
+  });
+  if(G.shopTab === "heroes"){ drawShopHeroes(); mbtn({...SHOP_BACK, label:"BACK TO MAP"}, hoverMenu==="SHOPBACK"); return; }
   for(const r of shopRows()){
     const owned = r.cost === null;
     const afford = !owned && SAVE.renown >= r.cost;
@@ -2523,6 +2738,21 @@ function drawShop(){
   mbtn({...SHOP_BACK, label:"BACK TO MAP"}, hoverMenu==="SHOPBACK");
 }
 function shopClick(p){
+  for(let i=0;i<SHOP_TABS.length;i++){
+    if(inBox(p, shopTab(i))){ G.shopTab = SHOP_TABS[i].id;
+      tone(560,0.06,"square",0.04); return true; }
+  }
+  if(G.shopTab === "heroes"){
+    for(const h of heroRows()){
+      if(h.owned || !inBox(p, h.buy)) continue;
+      if(SAVE.renown < h.cost){ tone(130,0.1,"square",0.03,0.6); return true; }
+      SAVE.renown -= h.cost; SAVE.hero = h.key; saveGame();
+      tone(523,0.12,"square",0.05,1.4); tone(784,0.18,"square",0.05,1.3,0.08);
+      return true;
+    }
+    if(inBox(p, SHOP_BACK)){ G.scene="map"; tone(500,0.07,"square",0.05,0.8); return true; }
+    return true;
+  }
   for(const r of shopRows()){
     if(r.cost === null || !inBox(p, r.buy)) continue;
     if(SAVE.renown < r.cost){ tone(130,0.1,"square",0.03,0.6); return true; }
@@ -2632,6 +2862,7 @@ const BEST_ROWS = [
   {t:"knight",   side:1,  who:"YOURS"},
   {t:"archer",   side:1,  who:"YOURS"},
   {t:"mage",     side:1,  who:"YOURS", lock:"mage"},
+  {t:"captain",  side:1,  who:"YOURS", lockHero:"captain"},
   {t:"spear",    side:-1, who:"HORDE"},
   {t:"knight",   side:-1, who:"HORDE"},
   {t:"archer",   side:-1, who:"HORDE"},
@@ -2651,7 +2882,8 @@ function drawBestiary(){
   txt("THE HORDE", 24, 194, 8, "#e8a08a", "left", false);
   BEST_ROWS.forEach((r,i)=>{
     const b = bestBox(i), T = TYPES[r.t];
-    const locked = r.lock && !SAVE.unlocked[r.lock];
+    const locked = (r.lock && !SAVE.unlocked[r.lock])
+                || (r.lockHero && SAVE.hero !== r.lockHero);
     panel(b.x, b.y, b.w, b.h, locked?"#2e281f":"#33261a", P.panelD, P.panelL, 2);
     const S = SPR[r.t][r.side];
     const sc = Math.min(46/S.w, 56/S.h);
@@ -2785,6 +3017,7 @@ function startBattle(){
   G.started = true;
   reset();
   if(!OPT.tutorialDone) tutStart();      // first ever battle is guided
+  if(SAVE.hero) spawnHero();            // heroes join at battle start only
   G.speed = OPT.fastDefault ? 2 : 1;
   G.overlay = null;
   G.scene = "intro"; G.sceneT = 0;
@@ -2811,7 +3044,12 @@ cv.addEventListener("mousemove", e=>{
     if(inBox(p,MAP_BACK)){ hoverMenu="MAPBACK"; hot=true; }
     MAP_NODES.forEach((n,i)=>{ if(SAVE.progress>=i+1 && inBox(p,nodeBox(i))) hot=true; });
   } else if(G.scene==="shop"){
-    for(const r of shopRows()) if(r.cost!==null && inBox(p,r.buy)){ hoverMenu="BUY"+r.key; hot=true; }
+    for(let i=0;i<SHOP_TABS.length;i++) if(inBox(p,shopTab(i))) hot=true;
+    if(G.shopTab==="heroes"){
+      for(const h of heroRows()) if(!h.owned && inBox(p,h.buy)){ hoverMenu="HERO"+h.key; hot=true; }
+    } else {
+      for(const r of shopRows()) if(r.cost!==null && inBox(p,r.buy)){ hoverMenu="BUY"+r.key; hot=true; }
+    }
     if(inBox(p,SHOP_BACK)){ hoverMenu="SHOPBACK"; hot=true; }
   } else if(G.scene==="bestiary"){
     if(inBox(p,BEST_BACK)){ hoverMenu="BESTBACK"; hot=true; }
@@ -2822,6 +3060,7 @@ cv.addEventListener("mousemove", e=>{
     if(inBox(p,HOME_DR)){ hoverMenu="TD+"; hot=true; }
   } else if(G.scene==="play"){
     roster().forEach((k,i)=>{ if(inBox(p,cardRect(i))){ hoverCard=i; hot=true; } });
+    if(SAVE.hero && inBox(p,HERO_BTN)){ hoverMenu="HERO"; hot=true; }
     if(inBox(p,GEAR_BTN)){ hoverGear=true; hot=true; }
     if(inBox(p,SPEED_BTN)) hot=true;
   }
@@ -2867,6 +3106,7 @@ cv.addEventListener("pointerdown", e=>{
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; return; }
   if(inBox(p,SPEED_BTN)){ G.speed = G.speed===1?2:1; return; }
   if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
+  if(SAVE.hero && inBox(p,HERO_BTN)){ heroAbility(); return; }
   if(p.y > BAND_TOP-8 && p.y < BAND_BOT+8){        // click a lane to select it
     G.lane = nearestOpenLane(laneAt(p.y)); G.laneFlash = 1; G.tut.laneMoved = true;
     tone(500+G.lane*40, 0.05, "square", 0.03); return;
@@ -2889,6 +3129,7 @@ addEventListener("keydown", e=>{
   else if(k==="2") tryBuy("knight");
   else if(k==="3") tryBuy("archer");
   else if(k==="4" && SAVE.unlocked.mage) tryBuy("mage");
+  else if(k===" " || k==="spacebar") heroAbility();
   else if(k==="s") G.speed = G.speed===1?2:1;
   else if(k==="m"){
     if(OPT.music>0 || OPT.sfx>0){ OPT._m=OPT.music; OPT._s=OPT.sfx; OPT.music=0; OPT.sfx=0; }
@@ -2950,7 +3191,7 @@ function step(now){
     // balance harness stays a pure function of dt.
     if(G.hitstop > 0){ G.hitstop -= dt; }
     else if(G.scene==="title"){ /* home is a place, not a live match */ }
-    else if(G.scene==="play"){ tutStep(dt); for(let i=0;i<G.speed;i++) update(dt); }
+    else if(G.scene==="play"){ tutStep(dt); heroTick(dt); for(let i=0;i<G.speed;i++) update(dt); }
     else if(G.scene==="result"){ stepFx(dt); }
   }
   render();
@@ -2971,6 +3212,7 @@ window.__bannerline = {
   setDiff(v){ OPT.difficulty = v; }, getDiff(){ return DIFF[OPT.difficulty].name; },
   tutStart, tutStep, tutFinish, TUT,
   SAVE, saveGame, wipeSave, UPGRADES, roster, BATTLES,
+  HEROES, spawnHero, heroTick, heroAbility,
   sim(seconds, policy){
     reset();
     const dt = 1/30;

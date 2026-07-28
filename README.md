@@ -111,6 +111,18 @@ The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely, wh
 
 The home screen is a **menu**, not a match already in progress — a static scene of the two keeps facing each other, with Campaign / Bestiary / Settings and the difficulty picker. The unit glossary lives in the **Bestiary**, which lists both armies with stats and counters, and greys out what you haven't unlocked.
 
+## Heroes
+
+Once you buy one from the **Heroes** tab of the store, a hero marches in every battle for free. It fights on its own, and:
+
+- **It walks to whichever lane you've selected.** One input does both jobs, it needs no extra controls (so it works on touch), and because it *walks*, switching lanes leaves it out of position for about a second — lane commitment still costs something.
+- **One ability** on a cooldown — `Space` or the button bottom-left.
+- **Death is a timed respawn** at your keep, not a permanent loss. A 60-second battle can't carry permadeath.
+
+The first hero is the **Standard-Bearer**: tanky, modest damage, and RALLY hastens and strengthens the troops around him. It's deliberately an *anchor* rather than a carry — a duelist hero would turn your army into an escort, which is the failure mode worth avoiding.
+
+⚠️ **Known imbalance.** The hero swings the hardest tier from 53% to 88%. Stat nerfs don't close it — the power is in being a permanent free body that respawns and can plug any lane, not in its numbers. The correct fix is an enemy champion at the top tiers to answer it, which isn't built yet.
+
 ## Settings
 
 Reachable from the title screen or the in-game gear icon (`Esc` / `P`). All options persist to `localStorage`:
