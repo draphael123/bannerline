@@ -55,9 +55,11 @@ Terrain is enforced everywhere, not just for the player — blocked lanes reject
 
 ## Lanes
 
-The field is five lanes deep and **you choose which one each unit marches into** — arrow keys, or click the lane directly. Melee only reaches its own lane and the two beside it, so the choice is real: concentrate to punch a hole, or spread to avoid being flanked. An empty lane is a free run at your keep.
+Five lanes deep, and **you choose which one each unit marches into** — arrow keys, or tap the lane.
 
-The AI picks lanes too, and how well it does so is part of difficulty.
+⚠️ Lanes used to be nearly decorative. Melee reached its own lane **±1**, covering 3 of 5 lanes, and archers ignored lanes entirely. Measured: **84% of melee engagements and 97% of ranged ones crossed lanes.** Lane choice still moved win rates, but only indirectly — stacking one lane made units queue single-file and lose throughput — so lanes mattered for a reason the player couldn't see. Melee is now strictly same-lane (100%), archers spill exactly one, and the Knight's cleave and the Mage's blast are the deliberate lane-crossing exceptions.
+
+An empty lane is now a genuine free run at your keep.
 
 ## Difficulty
 
@@ -87,6 +89,25 @@ Note the "Fast" row does *worse* than Novice at Warlord (5% vs 37%): dumping gol
 ## Tutorial
 
 The first ever battle is guided — nine steps that gate on what you actually do, not on timers alone: buy a unit, change lane, field four units, watch the line form. **The enemy is held off the field entirely until step 5**, so the opening is a lesson rather than an ambush. `Esc` skips it, and Settings has a **Replay Tutorial** action. Completion persists to `localStorage`.
+
+## The campaign map, the store and the save
+
+A parchment **campaign map** with three nodes shows what's cleared, what's next and what's locked; progress, renown and unlocks persist to `localStorage` automatically.
+
+Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it with **The Quartermaster**:
+
+| | |
+|---|---|
+| **Mage** — 200 | Blast damage across **every** lane. 38 HP — paper. |
+| Reinforced Walls — 3 levels | +90 keep HP each |
+| Deeper Coffers — 3 levels | +9% gold income each |
+| Standing Army — 2 levels | +45 starting gold each |
+
+The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely, which is only meaningful *because* everything else no longer does. It shipped underpowered at 110g/15dmg (it actually made you worse — Warlord 65% → 35%) and was corrected to 100g/21dmg, which puts it ahead: Veteran 76% → 94%.
+
+## Home and bestiary
+
+The home screen is a **menu**, not a match already in progress — a static scene of the two keeps facing each other, with Campaign / Bestiary / Settings and the difficulty picker. The unit glossary lives in the **Bestiary**, which lists both armies with stats and counters, and greys out what you haven't unlocked.
 
 ## Settings
 
