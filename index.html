@@ -186,6 +186,7 @@ function colsFor(side){
 // shuffle: [front leg dy, back leg dy, body bob, arm swing]
 const GAIT = [ [0,3,0,1], [2,1,-1,0], [3,0,0,-1], [1,2,-1,0] ];
 const FRAMES = 5;                                  // 0-3 walk, 4 attack
+const VARIANTS = [null, "rgba(255,232,180,0.14)", "rgba(46,64,128,0.15)"];
 
 // The goblin horde palette. The enemy is a different SPECIES, not a palette
 // swap — two silhouettes beat one silhouette in two colours in a crowd.
@@ -199,8 +200,9 @@ const GOB = {
 function artSpear(c, K, frame){
   const atk = frame===4, g = GAIT[atk?0:frame];
   const B = atk ? 0 : g[2];
-  R(c, 7, 30+g[0], 4, 9-g[0], K.d);  R(c, 12, 30+g[1], 4, 9-g[1], K.d);
-  R(c, 6, 37+g[0], 6, 2, P.woodD);   R(c, 12, 37+g[1], 6, 2, P.woodD);
+  R(c, 7, 30+g[0], 4, 9-g[0], "#3c4a5e");  R(c, 12, 30+g[1], 4, 9-g[1], "#33404f");
+  R(c, 6, 36+g[0], 7, 3, "#4a3524");  R(c, 12, 36+g[1], 7, 3, "#3d2b1d");
+  R(c, 6, 36+g[0], 7, 1, "#63482f");  R(c, 12, 36+g[1], 7, 1, "#63482f");
   R(c, 6, 17+B, 11, 14, K.m);
   R(c, 6, 17+B, 11, 2, K.l);
   R(c, 6, 19+B, 2, 12, K.l);
@@ -287,12 +289,18 @@ function artArcher(c, K, frame){
   R(c, 8, 20+B, 3, 8, K.d);
   R(c, 5, 5+B, 13, 12, K.d);
   R(c, 5, 5+B, 13, 2, K.m);
-  R(c, 7, 9+B, 8, 6, P.skin);
-  R(c, 7, 9+B, 8, 1, "#fbe6bd");
-  R(c, 12, 11+B, 2, 2, P.ink);
-  R(c, 5, 15+B, 13, 2, K.m);
-  R(c, 1, 14+B, 4, 9, P.woodD);
-  R(c, 2, 11+B, 1, 4, P.bone); R(c, 4, 10+B, 1, 5, P.bone);
+  R(c, 9, 2+B, 8, 4, K.d);                    // hood peak
+  R(c, 10, 3+B, 6, 2, K.m);
+  R(c, 7, 9+B, 9, 7, P.skin);                 // face
+  R(c, 7, 9+B, 9, 1, "#fbe6bd");
+  R(c, 12, 11+B, 2, 3, P.ink);
+  R(c, 8, 14+B, 4, 1, P.skinD);
+  R(c, 5, 16+B, 13, 2, K.m);
+  R(c, 4, 20+B, 3, 11, K.l);                  // cloak edge
+  R(c, 0, 13+B, 5, 11, P.woodD);              // quiver
+  R(c, 0, 13+B, 5, 2, "#a97046");
+  R(c, 1, 9+B, 1, 5, P.bone); R(c, 3, 8+B, 1, 6, P.bone);
+  R(c, 1, 8+B, 1, 2, "#c94a3a"); R(c, 3, 7+B, 1, 2, "#c94a3a");
   R(c, 16, 20+B, 3, 6, K.m);
   const bx = atk ? 22 : 20;
   R(c, bx, 8+B, 2, 22, P.wood);
@@ -383,9 +391,11 @@ function artGobBrute(c, K, frame){
     R(c, 24, 6+B, 3, 3, GOB.boneD);
   } else {
     R(c, 27, 12+B, 4, 16, P.wood);
-    R(c, 25, 4+B, 8, 10, GOB.boneD);
-    R(c, 26, 5+B, 6, 7, GOB.bone);
-    R(c, 27, 7+B, 3, 3, GOB.boneD);
+    R(c, 25, 4+B, 8, 10, "#8a8271");
+    R(c, 26, 5+B, 6, 7, GOB.boneD);
+    R(c, 26, 5+B, 4, 4, GOB.bone);
+    R(c, 28, 9+B, 3, 3, "#8a8271");
+    R(c, 25, 12+B, 8, 2, "#6f6959");
   }
   c.restore();
 }
@@ -507,11 +517,15 @@ function bakeUnits(){
       if(!art) continue;                    // warchief is enemy-only
       const flip = side < 0;                  // all art drawn facing right
       const frames = [], flashes = [], far = [];
+      // VARIANTS: twenty identical sprites read as clone stamps. A subtle
+      // warm/cool shift per unit is enough to make a crowd read as a mob.
+      // Flash and far copies stay single-variant — white and dimmed
+      // respectively, where the difference would be invisible.
+      for(let v=0; v<VARIANTS.length; v++)
+        for(let f=0; f<FRAMES; f++)
+          frames.push(bake(box.w, box.h, c=>art(c,K,f), flip, null, VARIANTS[v]));
       for(let f=0; f<FRAMES; f++){
-        frames.push (bake(box.w, box.h, c=>art(c,K,f), flip));
         flashes.push(bake(box.w, box.h, c=>art(c,K,f), flip, "#ffffff"));
-        // pre-dimmed copy for the back ranks — cheaper and crisper than
-        // compositing a darkening pass per unit per frame
         far.push    (bake(box.w, box.h, c=>art(c,K,f), flip, null, "rgba(26,22,44,0.26)"));
       }
       SPR[type][side] = { frames, flashes, far, w:box.w+2, h:box.h+2 };
@@ -790,7 +804,7 @@ const G = {
   gold:60, goldMax:240,
   eGold:60, eBrainCd:0,
   units:[], shots:[], nums:[], parts:[], corpses:[], dust:[], rings:[],
-  dying:[], slashes:[], stuck:[],
+  dying:[], slashes:[], stuck:[], scars:[],
   keepP:{hp:400,max:400,x:-4}, keepE:{hp:400,max:400,x:104},
   front:50, frontTarget:50,
   timeLeft:180,
@@ -806,8 +820,8 @@ function reset(){
   G.t=0; G.over=null; G.speed=1;
   G.gold=60; G.eGold=60; G.eBrainCd=1.2;
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
-  G.dying=[]; G.slashes=[]; G.stuck=[];
-  G.keepP={hp:400,max:400,x:-4}; G.keepE={hp:400,max:400,x:104};
+  G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
+  G.keepP={hp:400,max:400,x:-4,ruin:0}; G.keepE={hp:400,max:400,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false;
   G.tut={on:false, i:0, t:0, laneMoved:false};
@@ -845,6 +859,7 @@ function spawn(typeKey, side, row){
     hp:T.hp, maxHp:T.hp,
     cd: 0.25 + Math.random()*0.3, kiteLeft: T.kiteBudget || 0,
     vox: (Math.random()*2-1)*1.7,
+    vari: Math.floor(Math.random()*VARIANTS.length),
     flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0,
     pop:1, step:Math.random()*6.28, lastStep:0,
   };
@@ -882,8 +897,9 @@ function damage(u, amount, src){
     if(u.side < 0) G.stats.kills++;
     // topple: units fall over instead of popping out of existence
     // topple AWAY from the enemy line — the blow came from the far side
-    G.dying.push({ type:u.type, side:u.side, row:u.row, x:u.x+u.vox, y:u.y,
+    G.dying.push({ type:u.type, side:u.side, row:u.row, vari:u.vari, x:u.x+u.vox, y:u.y,
                    t:0, dir:-u.side, hop:1 });
+    addScar(u.x, u.y, Math.random()<0.45 ? 2 : 0);
     G.corpses.push({x:u.x, y:u.y, side:u.side, life:7, kind:Math.random()<0.5?0:1});
     G.rings.push({x:u.x, y:u.y-12, r:2, life:0.3, c:u.side>0?P.blueL:P.redL});
     const K = u.side>0 ? P.blueL : P.redL;
@@ -893,6 +909,13 @@ function damage(u, amount, src){
     });
     thud(0.10, 0.04, 700);
   }
+}
+// Ground that has been fought over stays fought over. The churn used to live
+// only at the moving front line and vanished behind it, so the field never
+// showed where the battle had actually been.
+function addScar(x, y, kind){
+  G.scars.push({x, y, kind, a:0.55 + Math.random()*0.35});
+  if(G.scars.length > 340) G.scars.shift();
 }
 function pushNum(x,y,v,c){ G.nums.push({x,y,v,c,life:0.8,vy:-26}); }
 
@@ -941,6 +964,7 @@ function attack(u, target){
       if(Math.abs(o.x - target.x) < T.cleave)
         damage(o, T.dmg*(T.cleaveMult||0.5)*((T.bonus&&T.bonus[o.T.cls])||1), "melee");
     }
+    addScar(target.x, target.y, 1);
     G.shake = Math.max(G.shake, 1.8);
     G.hitstop = Math.max(G.hitstop, 0.045);
     G.rings.push({x:target.x, y:target.y-14, r:3, life:0.22, c:"#fff0b0"});
@@ -964,7 +988,20 @@ function attackKeep(u, keep){
     life:0.4+Math.random()*0.3, c:"#d8d2c0", s:2,
   });
   thud(0.16, 0.07, 380);
-  if(keep.hp <= 0) keep.hp = 0;
+  if(keep.hp <= 0 && !keep.ruin){
+    // the most important beat in the game had less feedback than a spearman
+    // dying. Give it a collapse.
+    keep.hp = 0; keep.ruin = 0.0001;
+    G.shake = 12; G.flash = 0.65; G.hitstop = Math.max(G.hitstop, 0.12);
+    const kx = keep.x;
+    for(let i=0;i<46;i++) G.parts.push({
+      x:kx + (Math.random()*2-1)*4, y:-10 - Math.random()*70,
+      vx:(Math.random()*2-1)*46, vy:-Math.random()*120-20,
+      life:0.7+Math.random()*0.9, c: i%3 ? "#9aa3ad" : "#6d7480", s:i%4?2:3,
+    });
+    thud(0.9, 0.12, 170);
+    tone(70, 0.8, "sawtooth", 0.05, 0.5);
+  }
 }
 
 // TERRITORY PAYS. Without this, banners are decoration and two even economies
@@ -1197,6 +1234,8 @@ function stepFx(dt){
   G.slashes = G.slashes.filter(sl => sl.t < 0.14);
   for(const st of G.stuck) st.life -= dt;
   G.stuck = G.stuck.filter(st => st.life > 0);
+  if(G.keepP.ruin) G.keepP.ruin += dt;
+  if(G.keepE.ruin) G.keepE.ruin += dt;
   for(const c of G.corpses) c.life -= dt;
   G.corpses = G.corpses.filter(c => c.life > 0);
   G.shake *= Math.pow(0.0015, dt);
@@ -1222,6 +1261,39 @@ function endGame(title, sub){
 // UI CHROME — shaped panels, not plain rects
 //////////////////////////////////////////////////////////////////////////////
 function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
+
+// EMISSIVE LAYER. Nothing in the scene emitted light before — fire, gold and
+// sparks were just coloured squares. Requests are queued during the world
+// pass and composited additively in one go, which is both cheaper and lets
+// overlapping sources stack the way real light does.
+const GLOWS = [];
+function glow(x, y, r, col, a){ GLOWS.push({x,y,r,col,a}); }
+function drawGlows(){
+  if(!GLOWS.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for(const g of GLOWS){
+    const grd = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.r);
+    grd.addColorStop(0,    g.col);
+    grd.addColorStop(0.45, g.col.replace(/[\d.]+\)$/, "0.35)"));
+    grd.addColorStop(1,    g.col.replace(/[\d.]+\)$/, "0)"));
+    ctx.globalAlpha = g.a;
+    ctx.fillStyle = grd;
+    ctx.fillRect(g.x-g.r, g.y-g.r, g.r*2, g.r*2);
+  }
+  ctx.restore();
+  GLOWS.length = 0;
+}
+
+// Centre-weighted grade. The frame was lit corner to corner, which is why it
+// read flat even when every individual asset was fine.
+function drawGrade(){
+  const g = ctx.createRadialGradient(W/2, 186, 130, W/2, 186, 430);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(10,7,20,0.38)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, 300);
+  ctx.globalAlpha = 0.05; px(96, 120, W-192, 150, "#ffd9a0"); ctx.globalAlpha = 1;
+}
 
 // pixel-rounded rect: two overlapping rects leave notched corners
 function rr(x,y,w,h,r,c){ px(x+r,y,w-2*r,h,c); px(x,y+r,w,h-2*r,c); }
@@ -1375,6 +1447,7 @@ function drawWeather(){
     const f = (G.wind % 7);
     if(f < 0.10 || (f > 0.16 && f < 0.21)){
       ctx.globalAlpha = 0.30; px(0,0,W,H,"#dfe8ff"); ctx.globalAlpha = 1;
+      glow(W/2, 150, 460, "rgba(210,230,255,1)", 0.5);
     }
   } else if(A.weather === "snow"){
     for(let i=0;i<70;i++){
@@ -1458,6 +1531,19 @@ function drawTerritory(){
     px(cx2, GROUND_Y-18 + ((d*13)%38), 2, 2, "#6d5230");
     ctx.globalAlpha = 1;
   }
+  // scars sit under the props and the fighters
+  for(const sc of G.scars){
+    const sxp = sx(sc.x), syp = GROUND_Y + sc.y;
+    ctx.globalAlpha = sc.a * 0.5;
+    if(sc.kind === 0){
+      px(sxp-4, syp-2, 9, 3, "#6d5230"); px(sxp-2, syp-4, 5, 2, "#5a4327");
+    } else if(sc.kind === 1){
+      px(sxp-5, syp-2, 11, 3, "#3f3128"); px(sxp-3, syp-4, 6, 2, "#2b211b");
+    } else {
+      px(sxp-4, syp-1, 8, 1, "#7a6a52"); px(sxp+3, syp-2, 2, 2, "#9aa3ad");
+    }
+    ctx.globalAlpha = 1;
+  }
   for(const s of SCENERY.field){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 
   // banded vertical shading — grounds the whole strip instead of a flat wash
@@ -1470,6 +1556,7 @@ function drawTerritory(){
 
   // the seam — quieter than before; churn and dust now carry the drama
   const pulse = 0.34 + Math.sin(G.t*7)*0.14;
+  for(let gy=BAND_TOP+10; gy<BAND_BOT; gy+=26) glow(fx, gy, 30, "rgba(200,236,255,1)", 0.16);
   ctx.globalAlpha = pulse;      px(fx-1, BAND_TOP, 3, h, "#ffffff");
   ctx.globalAlpha = pulse*0.4;  px(fx-4, BAND_TOP, 2, h, "#ffffff");
                                 px(fx+3, BAND_TOP, 2, h, "#ffffff");
@@ -1579,18 +1666,69 @@ function drawBanners(){
   }
 }
 
+// Procedural smoke column — pure function of the wind clock, no state.
+function smokeColumn(x, y, strength, seed){
+  for(let i=0;i<10;i++){
+    const t = ((G.wind*0.42 + i*0.1 + seed) % 1);
+    const yy = y - t*44*strength;
+    const xx = x + Math.sin(G.wind*0.8 + i*1.4 + seed)*7*t + t*5;
+    const sz = 3 + Math.round(t*7*strength);
+    ctx.globalAlpha = (1-t) * 0.42 * strength;
+    px(xx - sz/2, yy, sz, sz, i%3 ? "#5b5560" : "#726b78");
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawKeep(keep, side){
   const frac = keep.hp/keep.max;
   const dmg = frac < 0.34 ? 2 : frac < 0.67 ? 1 : 0;
   const img = KEEP[side][dmg];
   const cx = Math.round(sx(keep.x));
-  const x = cx - KEEP_W/2 - 1, y = GROUND_Y - KEEP_H - 1;
+  const sink = keep.ruin ? Math.min(13, keep.ruin*26) : 0;
+  const x = cx - KEEP_W/2 - 1, y = GROUND_Y - KEEP_H - 1 + sink;
   // grounding shadow
   ctx.globalAlpha = 0.26;
   px(cx-30, GROUND_Y-4, 60, 7, "#000");
   px(cx-34, GROUND_Y-2, 68, 3, "#000");
   ctx.globalAlpha = 1;
   ctx.drawImage(img, x, y);
+
+  // --- the keeps are the two biggest things on screen; stop them being static
+  if(side > 0){
+    // pennant that actually flies
+    const fx2 = cx - 20, fy = y + 4;
+    const w = Math.round(Math.sin(G.wind*3.1)*2);
+    px(fx2+3, fy+2+w, 15, 11, P.blue);
+    px(fx2+3, fy+2+w, 15, 2, P.blueL);
+    px(fx2+3, fy+11+w, 15, 2, P.blueD);
+    px(fx2+18, fy+4+w*2, 4, 8, P.blue);
+    // gate torches
+    for(const tx of [cx-16, cx+16]){
+      const fl = 3 + Math.round(Math.sin(G.wind*9 + tx)*1.2);
+      px(tx-1, GROUND_Y-26, 2, 9, P.woodD);
+      px(tx-2, GROUND_Y-30, 4, fl, GOB.fire);
+      px(tx-1, GROUND_Y-32, 2, 3, GOB.fireL);
+      glow(tx, GROUND_Y-29, 22, "rgba(255,168,60,1)", 0.42);
+    }
+  } else {
+    for(const tx of [cx-18, cx+18]){
+      const fl = 3 + Math.round(Math.sin(G.wind*8 + tx)*1.2);
+      px(tx-2, GROUND_Y-30, 4, fl, "#7ad46a");
+      px(tx-1, GROUND_Y-32, 2, 3, "#c6f2a8");
+      glow(tx, GROUND_Y-29, 20, "rgba(120,230,90,1)", 0.38);
+    }
+  }
+  if(dmg >= 1) smokeColumn(cx + (side>0?-14:14), y+22, dmg===2?1.25:0.7, side>0?0:3.3);
+  if(keep.ruin){
+    smokeColumn(cx-10, y+40, 1.7, 1.1);
+    smokeColumn(cx+12, y+52, 1.4, 4.7);
+    glow(cx, GROUND_Y-30, 62, "rgba(255,140,50,1)", Math.max(0, 0.5 - keep.ruin*0.12));
+    // rubble piling at the base
+    ctx.globalAlpha = Math.min(1, keep.ruin*2);
+    px(cx-34, GROUND_Y-8, 20, 8, "#7d858f"); px(cx-28, GROUND_Y-13, 10, 6, "#9aa3ad");
+    px(cx+14, GROUND_Y-7, 22, 7, "#7d858f"); px(cx+22, GROUND_Y-12, 9, 6, "#9aa3ad");
+    ctx.globalAlpha = 1;
+  }
   // hp plate
   const py = y - 4;
   panel(cx-30, py-14, 60, 13, P.panel, P.panelD, P.panelL, 2);
@@ -1607,7 +1745,7 @@ function drawUnit(u){
   const frame = u.atkAnim > 0.06 ? 4 : (Math.floor(u.bob*0.8) % 4);
   const img = u.flash > 0 ? S.flashes[frame]
             : u.row <= 1  ? S.far[frame]
-            :               S.frames[frame];
+            :               S.frames[(u.vari||0)*FRAMES + frame];
   const k = rankScale(u.row);
   const lunge = u.atkAnim > 0 ? Math.round(u.atkAnim*14)*u.side : 0;
   const x = Math.round(sx(u.x + u.vox)) + lunge;
@@ -1622,6 +1760,11 @@ function drawUnit(u){
   px(x-shw/2+3, y,   shw-6, 1, "#000");
   ctx.globalAlpha = 1;
   ctx.drawImage(img, Math.round(x-dw/2), y-dh, dw, dh);
+  // emissive bits
+  if(u.type === "archer" && u.side < 0)
+    glow(x + u.side*-11*k, y - dh + 7*k, 13*k, "rgba(255,150,40,1)", 0.40);
+  if(u.type === "warchief")
+    glow(x, y - dh*0.80, 13, "rgba(255,70,40,1)", 0.5);
   if(u.hp < u.maxHp){
     const w = Math.round((u.type==="knight" ? 22 : 16) * k);
     const hx = x - w/2, hy = y - dh - 5;
@@ -1648,7 +1791,7 @@ function drawDying(d){
   ctx.translate(x, y);
   ctx.rotate(ang);
   const dw = Math.round(S.w*k), dh = Math.round(S.h*k);
-  const img = d.t < 0.08 ? S.flashes[4] : S.frames[4];
+  const img = d.t < 0.08 ? S.flashes[4] : S.frames[(d.vari||0)*FRAMES + 4];
   ctx.drawImage(img, -dw/2|0, -dh|0, dw, dh);
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1682,6 +1825,7 @@ function drawSlash(sl){
     const fx2 = x + (sl.side>0?r:-r);
     px(fx2-3, y-1, 7, 2, "#fff6d2");
     px(fx2-1, y-4, 2, 8, "#fff6d2");
+    glow(fx2, y, 26, "rgba(255,240,190,1)", 0.55*(1-p*2));
     ctx.globalAlpha = 1;
   }
 }
@@ -2106,6 +2250,8 @@ function drawBattlefield(){
   drawLeaves();
   drawWash();
   drawWeather();
+  drawGlows();
+  drawGrade();
   ctx.restore();
   if(G.flash > 0.02){
     ctx.globalAlpha = G.flash*0.5; px(0,0,W,H,"#ffffff"); ctx.globalAlpha = 1;

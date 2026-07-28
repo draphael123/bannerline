@@ -112,6 +112,16 @@ Two **factions**, not a palette swap: blue-and-steel humans versus a green gobli
 
 **A living field.** Drop shadows on every unit, prop and keep; banded vertical shading plus a warm sun band; trees, bushes and banners swaying on individual phases via baked lean frames so the treeline never pulses in unison; birds, drifting leaves, churned earth and a dust haze over the clash. All of it is a pure function of a render-only `wind` clock, so ambient life costs the simulation nothing.
 
+**Emissive light.** Nothing in the scene emitted light before — fire, gold and sparks were just coloured squares. Bright sources (shaman flames, gate torches, impact sparks, the front-line seam, lightning, a burning keep) now queue additive glows composited in a single pass, so overlapping sources stack the way real light does.
+
+**Centre-weighted grade.** A vignette plus a warm centre. The frame was lit corner to corner, which is why it read flat even when every individual asset was fine.
+
+**Crowd variation.** Three baked tint variants per unit, assigned at spawn. Twenty byte-identical sprites read as clone stamps; a subtle warm/cool shift per soldier makes a crowd read as a mob.
+
+**Persistent battle scars.** Churn, scorch and dropped weapons accumulate permanently where fighting happened (capped at 340), so the ground shows where the battle has actually been rather than only where it currently is.
+
+**Keeps that live and die.** Flying pennants, gate torchlight, smoke pouring from damage stages — and a real collapse: the keep sinks, throws debris, catches fire and piles rubble. The most important beat in the game previously had less feedback than a spearman dying.
+
 **Per-battle atmosphere.** Each battle draws the next sky in rotation — Clear Day, Dusk, Storm (rain and lightning), Deep Winter (snowfall) — via sky/water swaps and a full-field colour wash. Props are baked with fixed colours, so washing is far cheaper than re-baking the scenery every battle.
 
 ## Balance harness
