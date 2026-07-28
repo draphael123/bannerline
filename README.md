@@ -39,6 +39,20 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 **Archers kite slowly, on a budget, and barely scratch stone.** They retreat at 0.68× speed with a 14-unit total budget, then stand and die — otherwise an unkillable archer ball forms. They also do 0.30× damage to keeps, so archers alone can't siege.
 
+## The campaign
+
+Three battles, each with its own **rules** rather than just a bigger wave:
+
+| | Battle | Twist |
+|---|---|---|
+| I | Hold the Crossing | The baseline fight, clear day. |
+| II | The Narrows | Marsh closes both outer lanes — three lanes only, you cannot spread. Dusk. |
+| III | The Warchief | A 1300 HP champion walks in partway through. Storm. |
+
+The Warchief triggers on **time or a last stand** (their keep dropping below 62%), whichever comes first — on a purely timed trigger a fast win meant you never met it. It's `heavy` class, so spears bring it down: the boss teaches the triangle rather than bypassing it.
+
+Terrain is enforced everywhere, not just for the player — blocked lanes reject spawns from both sides, and the AI's lane logic skips them.
+
 ## Lanes
 
 The field is five lanes deep and **you choose which one each unit marches into** — arrow keys, or click the lane directly. Melee only reaches its own lane and the two beside it, so the choice is real: concentrate to punch a hole, or spread to avoid being flanked. An empty lane is a free run at your keep.
@@ -128,6 +142,14 @@ Every sprite is **baked once at boot** into an offscreen canvas with a dark outl
 
 Hit-stop lives in the main loop, never inside `update()`, so the headless harness stays a pure function of `dt`.
 
+## Mobile
+
+The game is **landscape by design** — the whole point is seeing the entire battle line at once, which a portrait phone cannot show. So on a narrow portrait viewport it asks you to rotate, with a tap-to-play-anyway escape.
+
+In landscape it scales to fit any screen, taps work for everything (cards, lane selection, menus), and coarse pointers get a forgiving margin around every control. The tutorial swaps its keyboard prompts for tap instructions.
+
+⚠️ The old `fit()` did `Math.max(1, ...)`, clamping the scale to at least 1× — which forced a 640px-wide canvas onto every phone and overflowed the viewport. The game was simply broken below 640px and nobody had looked.
+
 ## Running locally
 
 Single file, no build step. Serve it — don't open as `file://`:
@@ -138,8 +160,8 @@ python -m http.server 5784
 
 ## Status
 
-v0. One battle, three units, four difficulty tiers. Combat, pacing, presentation and player agency are settled — lane choice closed the "no placement" gap, and the atmosphere system is already campaign-shaped (each battle draws the next sky).
+v0.5. Three battles, three units, four difficulty tiers, plays on a phone. Combat, pacing, presentation and player agency are settled — lane choice closed the "no placement" gap, and the atmosphere system is already campaign-shaped (each battle draws the next sky).
 
-The remaining gap is **content**: it's still a single battle, so there's no reason to play a fifth time beyond climbing difficulty. Next step is a short campaign slice with real per-battle variation (a terrain or objective twist, then a boss unit) to test whether the core sustains repetition before committing to a full campaign.
+Queued next: a proper save system (campaign progress currently only advances within a session), a richer intro, and a unit viewer / bestiary.
 
-Known rough edges: the unit sprites are improved but not exceptional and would benefit from real pixel-art iteration; there's no responsive layout, so phones are untested.
+Known rough edges: the unit sprites are improved but not exceptional and would benefit from real pixel-art iteration; there's no campaign map screen yet, so battles advance by restarting rather than through a chosen node.
