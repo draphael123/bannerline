@@ -53,9 +53,13 @@ The pause menu offers Resume / Settings / Restart / Quit to title.
 
 Two **factions**, not a palette swap: blue-and-steel humans versus a green goblin horde — spear skirmishers with lashed flint, a hulking brute with a bone club and plank shield, and a hooded shaman carrying a burning skull-staff. The player defends a crenellated stone keep; the goblins hold a sharpened-log palisade crowned with a skull totem. Two silhouettes beat one silhouette in two colours for readability in a crowd.
 
-Everything is grounded with drop shadows, banded vertical shading and a warm sun band. Trees, bushes and banners sway on individual phases (baked lean frames, so the treeline never pulses in unison), birds cross the sky, and leaves drift through the field — all pure functions of a render-only `wind` clock, so ambient life costs the simulation nothing.
+**Depth by rank.** The five lanes aren't just y-offsets — back rows draw ~14% smaller from pre-dimmed sprite variants, front rows at full size and contrast. Without it a twenty-unit scrum reads as a flat sticker sheet.
 
-The front line is sold by churned earth and a dust haze over the clash rather than a neon seam.
+**Combat reads in motion.** Units topple and fall rather than vanishing, pivoting at the feet away from the blow. Melee swings draw an arc with a spark at the point of impact, cleaves get a bigger, hotter one, and arrows stick in their target for a moment.
+
+**A living field.** Drop shadows on every unit, prop and keep; banded vertical shading plus a warm sun band; trees, bushes and banners swaying on individual phases via baked lean frames so the treeline never pulses in unison; birds, drifting leaves, churned earth and a dust haze over the clash. All of it is a pure function of a render-only `wind` clock, so ambient life costs the simulation nothing.
+
+**Per-battle atmosphere.** Each battle draws the next sky in rotation — Clear Day, Dusk, Storm (rain and lightning), Deep Winter (snowfall) — via sky/water swaps and a full-field colour wash. Props are baked with fixed colours, so washing is far cheaper than re-baking the scenery every battle.
 
 ## Balance harness
 
@@ -69,7 +73,7 @@ __bannerline.sim(190, (G, buy) => { if (G.gold >= 30) buy("spear"); })
 
 | Check | Target | Current |
 |---|---|---|
-| Player running AI's exact algorithm | ~50% | 33W/30L over 63 runs |
+| Player running AI's exact algorithm | ~50% | 47W/37L over 84 runs |
 | Stalemates | none | 0/21 |
 | Doing nothing | always loses | 0/17 |
 | Any mono-unit strategy | loses | 0/17 each |
@@ -95,4 +99,4 @@ python -m http.server 5784
 
 ## Status
 
-v0, feel-first: one battle, three units, one AI. Combat, pacing and presentation are settled. Natural next steps are campaign scaffolding (battle 2+, unit unlocks) or a wider roster.
+v0, feel-first: one battle, three units, one AI. Combat, pacing and presentation are settled, and the atmosphere system is already campaign-shaped (each battle draws the next sky). The open question is depth: the player's entire input is buying one of three units, with no placement, orders or abilities. Next step is either a short campaign slice with real per-battle variation, or commander abilities to deepen the battle itself.

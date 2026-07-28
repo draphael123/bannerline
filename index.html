@@ -37,10 +37,10 @@ const OL = "#241b2b";                        // the one outline colour
 const P = {
   skyHi:"#a8e6f0", skyLo:"#7fd2e4",
   water:"#2f96a2", waterD:"#1e6f7c", waterL:"#63bfc6", foam:"#d9f2f4",
-  grass:"#6ac95e", grassD:"#48a248", grassL:"#8ade72",
+  grass:"#6fd45f", grassD:"#4aa849", grassL:"#95e879",
   grassFar:"#5ab553", grassFarD:"#3d8f42",
-  ownP:"#8fdcc9", ownPd:"#57b09c", ownPl:"#b3ead9",
-  ownE:"#dd9179", ownEd:"#b0614c", ownEl:"#eeb59f",
+  ownP:"#6cc75f", ownPd:"#41984a", ownPl:"#93dc79",
+  ownE:"#c4634a", ownEd:"#8b3f2f", ownEl:"#dd8a6a",
   dirt:"#e0cd86", dirtD:"#c4ab63", dirtL:"#f2e5a8",
   blue:"#4f9ad0", blueD:"#2d6394", blueL:"#95d8f0",
   red:"#cc5642", redD:"#8e3324", redL:"#ef927a",
@@ -142,7 +142,7 @@ function R(c,x,y,w,h,col){ c.fillStyle=col; c.fillRect(x|0,y|0,w|0,h|0); }
 
 // Renders `draw` into a w×h canvas, then burns a 1px outline around the
 // silhouette and returns a (w+2)×(h+2) canvas. `flip` mirrors horizontally.
-function bake(w, h, draw, flip, tint){
+function bake(w, h, draw, flip, tint, shade){
   const art = document.createElement("canvas"); art.width=w; art.height=h;
   const ac = art.getContext("2d"); ac.imageSmoothingEnabled=false;
   if(flip){ ac.translate(w,0); ac.scale(-1,1); }
@@ -151,6 +151,12 @@ function bake(w, h, draw, flip, tint){
     ac.setTransform(1,0,0,1,0,0);
     ac.globalCompositeOperation="source-in";
     ac.fillStyle=tint; ac.fillRect(0,0,w,h);
+    ac.globalCompositeOperation="source-over";
+  }
+  if(shade){                                  // atmospheric dimming for back ranks
+    ac.setTransform(1,0,0,1,0,0);
+    ac.globalCompositeOperation="source-atop";
+    ac.fillStyle=shade; ac.fillRect(0,0,w,h);
     ac.globalCompositeOperation="source-over";
   }
   // silhouette
@@ -389,12 +395,15 @@ function bakeUnits(){
     for(const side of [1,-1]){
       const K = colsFor(side), art = UNIT_ART[side][type], box = UNIT_BOX[side][type];
       const flip = side < 0;                  // all art drawn facing right
-      const frames = [], flashes = [];
+      const frames = [], flashes = [], far = [];
       for(let f=0; f<3; f++){
         frames.push (bake(box.w, box.h, c=>art(c,K,f), flip));
         flashes.push(bake(box.w, box.h, c=>art(c,K,f), flip, "#ffffff"));
+        // pre-dimmed copy for the back ranks — cheaper and crisper than
+        // compositing a darkening pass per unit per frame
+        far.push    (bake(box.w, box.h, c=>art(c,K,f), flip, null, "rgba(26,22,44,0.26)"));
       }
-      SPR[type][side] = { frames, flashes, w:box.w+2, h:box.h+2 };
+      SPR[type][side] = { frames, flashes, far, w:box.w+2, h:box.h+2 };
     }
   }
 }
@@ -621,11 +630,12 @@ const TYPES = {
 const ORDER = ["spear","knight","archer"];
 
 const G = {
-  scene:"title", sceneT:0, overlay:null,
+  scene:"title", sceneT:0, overlay:null, battle:1, started:false,
   t:0, over:null, speed:1, paused:false,
   gold:60, goldMax:240,
   eGold:60, eBrainCd:0,
   units:[], shots:[], nums:[], parts:[], corpses:[], dust:[], rings:[],
+  dying:[], slashes:[], stuck:[],
   keepP:{hp:400,max:400,x:-4}, keepE:{hp:400,max:400,x:104},
   front:50, frontTarget:50,
   timeLeft:180,
@@ -641,6 +651,7 @@ function reset(){
   G.t=0; G.over=null; G.speed=1;
   G.gold=60; G.eGold=60; G.eBrainCd=1.2;
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
+  G.dying=[]; G.slashes=[]; G.stuck=[];
   G.keepP={hp:400,max:400,x:-4}; G.keepE={hp:400,max:400,x:104};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
@@ -710,6 +721,10 @@ function damage(u, amount, src){
   if(u.hp <= 0){
     u.dead = true;
     if(u.side < 0) G.stats.kills++;
+    // topple: units fall over instead of popping out of existence
+    // topple AWAY from the enemy line — the blow came from the far side
+    G.dying.push({ type:u.type, side:u.side, row:u.row, x:u.x+u.vox, y:u.y,
+                   t:0, dir:-u.side, hop:1 });
     G.corpses.push({x:u.x, y:u.y, side:u.side, life:7, kind:Math.random()<0.5?0:1});
     G.rings.push({x:u.x, y:u.y-12, r:2, life:0.3, c:u.side>0?P.blueL:P.redL});
     const K = u.side>0 ? P.blueL : P.redL;
@@ -757,6 +772,8 @@ function attack(u, target){
     return;
   }
   const mult = (T.bonus && T.bonus[target.T.cls]) || 1;
+  G.slashes.push({ x:(u.x+target.x)/2, y:(u.y+target.y)/2 - 14, row:u.row,
+                   side:u.side, big:!!T.cleave, t:0 });
   damage(target, T.dmg * mult, "melee");
   if(T.cleave){
     for(const o of G.units){
@@ -909,7 +926,10 @@ function update(dt){
     s.t += dt;
     if(s.t >= s.dur){
       s.done = true;
-      if(s.target && !s.target.dead) damage(s.target, s.dmg, "arrow");
+      if(s.target && !s.target.dead){
+        damage(s.target, s.dmg, "arrow");
+        G.stuck.push({x:s.target.x, y:s.target.y-12, side:s.side, life:0.9});
+      }
     }
   }
   G.shots = G.shots.filter(s => !s.done);
@@ -969,6 +989,12 @@ function stepFx(dt){
   G.dust = G.dust.filter(d => d.life > 0);
   for(const r of G.rings){ r.life -= dt; r.r += dt*70; }
   G.rings = G.rings.filter(r => r.life > 0);
+  for(const d of G.dying){ d.t += dt; d.hop = Math.max(0, d.hop - dt*4); }
+  G.dying = G.dying.filter(d => d.t < 0.95);
+  for(const sl of G.slashes) sl.t += dt;
+  G.slashes = G.slashes.filter(sl => sl.t < 0.14);
+  for(const st of G.stuck) st.life -= dt;
+  G.stuck = G.stuck.filter(st => st.life > 0);
   for(const c of G.corpses) c.life -= dt;
   G.corpses = G.corpses.filter(c => c.life > 0);
   G.shake *= Math.pow(0.0015, dt);
@@ -1098,18 +1124,80 @@ function propShadow(k, x, y){
 //////////////////////////////////////////////////////////////////////////////
 // RENDER
 //////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+// ATMOSPHERE — each battle gets its own sky. Props are baked with fixed
+// colours, so the mood comes from sky/water swaps plus a full-field colour
+// wash rather than re-baking the whole scenery set every battle.
+//////////////////////////////////////////////////////////////////////////////
+const ATMO = [
+  { name:"CLEAR DAY", title:"HOLD THE CROSSING",
+    skyHi:"#a8e6f0", skyLo:"#7fd2e4", water:"#2f96a2",
+    wash:null, weather:null, clouds:"#ffffff" },
+  { name:"DUSK", title:"THE LONG SHADOW",
+    skyHi:"#f2a45c", skyLo:"#c65f86", water:"#4c5f9e",
+    wash:{c:"#ff8438", a:0.17}, weather:null, clouds:"#ffd0b0" },
+  { name:"STORM", title:"THE DELUGE",
+    skyHi:"#6e7688", skyLo:"#494f61", water:"#2a4552",
+    wash:{c:"#2c3858", a:0.26}, weather:"rain", clouds:"#8d94a4" },
+  { name:"DEEP WINTER", title:"THE WHITE CROSSING",
+    skyHi:"#d2e6f4", skyLo:"#a6c3dc", water:"#4a7089",
+    wash:{c:"#cfe2f7", a:0.21}, weather:"snow", clouds:"#ffffff" },
+];
+function atmo(){ return ATMO[(Math.max(1,G.battle)-1) % ATMO.length]; }
+function roman(n){
+  const R = ["","I","II","III","IV","V","VI","VII","VIII","IX","X"];
+  return R[n] || String(n);
+}
+function drawWeather(){
+  const A = atmo();
+  if(A.weather === "rain"){
+    for(let i=0;i<90;i++){
+      const t = (G.wind*1.5 + i*0.0111) % 1;
+      const rx = ((i*137) % (W+60)) - 30 + t*26;
+      const ry = -10 + t*(H+20);
+      ctx.globalAlpha = 0.34;
+      px(rx, ry, 1, 7, "#cfe0f0");
+      ctx.globalAlpha = 1;
+    }
+    // occasional lightning
+    const f = (G.wind % 7);
+    if(f < 0.10 || (f > 0.16 && f < 0.21)){
+      ctx.globalAlpha = 0.30; px(0,0,W,H,"#dfe8ff"); ctx.globalAlpha = 1;
+    }
+  } else if(A.weather === "snow"){
+    for(let i=0;i<70;i++){
+      const t = (G.wind*0.22 + i*0.0143) % 1;
+      const sxp = ((i*151) % (W+40)) - 20 + Math.sin(G.wind*0.9 + i)*9;
+      const sy = -8 + t*(H+16);
+      ctx.globalAlpha = 0.72;
+      const sz = 1 + (i%3===0?1:0);
+      px(sxp, sy, sz, sz, "#ffffff");
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+function drawWash(){
+  const w = atmo().wash;
+  if(!w) return;
+  ctx.globalAlpha = w.a;
+  px(0, 0, W, 300, w.c);
+  ctx.globalAlpha = 1;
+}
+
 function drawSky(){
-  px(0,0,W,46,P.skyHi);
-  px(0,46,W,30,P.skyLo);
+  const A = atmo();
+  px(0,0,W,46,A.skyHi);
+  px(0,46,W,30,A.skyLo);
   // clouds
   for(let i=0;i<4;i++){
     const cx = ((i*181 + G.t*5) % (W+120)) - 60, cy = 12 + (i%3)*13;
-    px(cx, cy, 34, 8, "#ffffff"); px(cx+8, cy-5, 20, 8, "#ffffff");
-    px(cx+4, cy+7, 26, 3, "#d8eef5");
+    px(cx, cy, 34, 8, A.clouds); px(cx+8, cy-5, 20, 8, A.clouds);
+    ctx.globalAlpha=0.55; px(cx+4, cy+7, 26, 3, A.clouds); ctx.globalAlpha=1;
   }
 }
 function drawWater(){
-  px(0,76,W,58,P.water);
+  const A = atmo();
+  px(0,76,W,58,A.water);
   px(0,76,W,3,P.waterD);
   for(let i=0;i<W;i+=8){
     px(i, 84+Math.sin(i*0.05+G.t*0.7)*2, 6, 2, P.waterL);
@@ -1144,7 +1232,7 @@ function drawTerritory(){
   }
   // trodden road
   const ty = GROUND_Y - 30;
-  ctx.globalAlpha = 0.34; px(0, ty, W, 62, P.dirt); ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.26; px(0, ty, W, 62, P.dirt); ctx.globalAlpha = 1;
   ctx.globalAlpha = 0.20;
   for(let x=0;x<W;x+=7) px(x, ty+4+((x*11)%54), 4, 2, P.dirtD);
   ctx.globalAlpha = 1;
@@ -1161,11 +1249,11 @@ function drawTerritory(){
   for(const s of SCENERY.field){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 
   // banded vertical shading — grounds the whole strip instead of a flat wash
-  ctx.globalAlpha = 0.13; px(0, BAND_TOP,    W, 7,  "#1b2334");
-  ctx.globalAlpha = 0.07; px(0, BAND_TOP+7,  W, 7,  "#1b2334");
-  ctx.globalAlpha = 0.06; px(0, GROUND_Y-34, W, 22, "#ffd9a0");   // sun band
-  ctx.globalAlpha = 0.08; px(0, BAND_BOT-12, W, 12, "#1b2334");
-  ctx.globalAlpha = 0.05; px(0, BAND_BOT-6,  W, 6,  "#101828");
+  ctx.globalAlpha = 0.09; px(0, BAND_TOP,    W, 7,  "#1b2334");
+  ctx.globalAlpha = 0.05; px(0, BAND_TOP+7,  W, 7,  "#1b2334");
+  ctx.globalAlpha = 0.09; px(0, GROUND_Y-34, W, 22, "#ffe4b0");   // sun band
+  ctx.globalAlpha = 0.06; px(0, BAND_BOT-12, W, 12, "#1b2334");
+  ctx.globalAlpha = 0.04; px(0, BAND_BOT-6,  W, 6,  "#101828");
   ctx.globalAlpha = 1;
 
   // the seam — quieter than before; churn and dust now carry the drama
@@ -1262,40 +1350,101 @@ function drawKeep(keep, side){
   txt(Math.ceil(keep.hp), cx, py-2, 9, P.cream, "center");
 }
 
+// Rank depth: back rows are smaller and pre-dimmed, front rows full size and
+// full contrast. Without this a 20-unit scrum reads as a flat sticker sheet.
+function rankScale(row){ return 0.86 + (row/(ROWS-1))*0.22; }
+
 function drawUnit(u){
   const S = SPR[u.type][u.side];
   const frame = u.atkAnim > 0.06 ? 2 : (Math.floor(u.bob*0.9) % 2);
-  const img = u.flash > 0 ? S.flashes[frame] : S.frames[frame];
+  const img = u.flash > 0 ? S.flashes[frame]
+            : u.row <= 1  ? S.far[frame]
+            :               S.frames[frame];
+  const k = rankScale(u.row);
   const lunge = u.atkAnim > 0 ? Math.round(u.atkAnim*14)*u.side : 0;
   const x = Math.round(sx(u.x + u.vox)) + lunge;
   const y = Math.round(GROUND_Y + u.y);
-  // spawn pop: squash then settle
-  const pop = u.pop;
-  const sw = 1 + pop*0.5, sh = 1 - pop*0.35;
-  const shw = S.w-6;
+  const pop = u.pop;                          // spawn squash, then settle
+  const sw = k * (1 + pop*0.5), sh = k * (1 - pop*0.35);
+  const dw = Math.round(S.w*sw), dh = Math.round(S.h*sh);
+  const shw = Math.round((S.w-6)*k);
   ctx.globalAlpha = .30;
   px(x-shw/2+2, y-4, shw-4, 2, "#000");
   px(x-shw/2,   y-2, shw,   2, "#000");
   px(x-shw/2+3, y,   shw-6, 1, "#000");
   ctx.globalAlpha = 1;
-  if(pop > 0.01){
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(sw, sh);
-    ctx.drawImage(img, -S.w/2|0, -S.h|0);
-    ctx.restore();
-  } else {
-    ctx.drawImage(img, (x - S.w/2)|0, (y - S.h)|0);
-  }
+  ctx.drawImage(img, Math.round(x-dw/2), y-dh, dw, dh);
   if(u.hp < u.maxHp){
-    const w = u.type==="knight" ? 22 : 16;
-    const hx = x - w/2, hy = y - S.h - 5;
+    const w = Math.round((u.type==="knight" ? 22 : 16) * k);
+    const hx = x - w/2, hy = y - dh - 5;
     px(hx-1, hy-1, w+2, 5, OL);
     px(hx, hy, w, 3, "#4a3a26");
     const f = u.hp/u.maxHp;
     px(hx, hy, Math.max(0,Math.round(w*f)), 3, u.side>0?"#66d96e":"#e8574a");
     px(hx, hy, Math.max(0,Math.round(w*f)), 1, "#ffffff60");
   }
+}
+
+// A unit toppling over. Pivots at the feet, hops slightly, then fades — far
+// more readable than the old "vanish into particles".
+function drawDying(d){
+  const S = SPR[d.type][d.side];
+  const k = rankScale(d.row);
+  const p = Math.min(1, d.t/0.34);                 // fall progress
+  const ang = (p*p) * (Math.PI/2) * d.dir;
+  const x = Math.round(sx(d.x));
+  const y = Math.round(GROUND_Y + d.y) - Math.round(d.hop*4);
+  const fade = d.t > 0.62 ? Math.max(0, 1-(d.t-0.62)/0.33) : 1;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  const dw = Math.round(S.w*k), dh = Math.round(S.h*k);
+  const img = d.t < 0.08 ? S.flashes[2] : S.frames[2];
+  ctx.drawImage(img, -dw/2|0, -dh|0, dw, dh);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// Weapon arc — sells the force of a blow, which a flash and a number don't.
+function drawSlash(sl){
+  const p = sl.t/0.14;
+  const k = rankScale(sl.row);
+  const x = sx(sl.x), y = GROUND_Y + sl.y;
+  const r = (sl.big ? 19 : 12) * k * (0.55 + p*0.75);
+  ctx.save();
+  ctx.globalAlpha = (1-p) * 0.95;
+  ctx.strokeStyle = sl.big ? "#ffe9a8" : "#ffffff";
+  ctx.lineWidth = sl.big ? 4 : 3;
+  ctx.beginPath();
+  const a0 = sl.side>0 ? -1.15 : Math.PI+1.15;
+  const a1 = sl.side>0 ?  1.15 : Math.PI-1.15;
+  ctx.arc(x, y, r, Math.min(a0,a1), Math.max(a0,a1));
+  ctx.stroke();
+  ctx.globalAlpha = (1-p) * 0.5;
+  ctx.strokeStyle = sl.big ? "#ff9c3a" : "#bfe6ff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r+2, Math.min(a0,a1), Math.max(a0,a1));
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  if(p < 0.45){                                    // impact spark
+    ctx.globalAlpha = 1-p*2;
+    const fx2 = x + (sl.side>0?r:-r);
+    px(fx2-3, y-1, 7, 2, "#fff6d2");
+    px(fx2-1, y-4, 2, 8, "#fff6d2");
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawStuckArrow(st){
+  ctx.globalAlpha = Math.min(1, st.life*2.2);
+  const x = sx(st.x), y = GROUND_Y + st.y;
+  px(x-1, y-1, 8, 3, OL);
+  px(x, y, 6, 1, "#4a3520");
+  px(x + (st.side>0?-1:5), y, 2, 1, P.steel);
+  ctx.globalAlpha = 1;
 }
 
 function drawCorpse(c){
@@ -1572,11 +1721,17 @@ function drawBattlefield(){
   drawTerritory(); drawBanners();
   drawKeep(G.keepP, 1); drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
-  const sorted = G.units.slice().sort((a,b)=>a.y-b.y);
-  for(const u of sorted) drawUnit(u);
+  // depth-sort the living and the dying together so falling bodies stay in rank
+  const cast = G.units.map(u=>({y:u.y, u})).concat(G.dying.map(d=>({y:d.y, d})));
+  cast.sort((a,b)=>a.y-b.y);
+  for(const e of cast){ if(e.u) drawUnit(e.u); else drawDying(e.d); }
+  for(const st of G.stuck) drawStuckArrow(st);
+  for(const sl of G.slashes) drawSlash(sl);
   drawFx();
   drawFore();
   drawLeaves();
+  drawWash();
+  drawWeather();
   ctx.restore();
   if(G.flash > 0.02){
     ctx.globalAlpha = G.flash*0.5; px(0,0,W,H,"#ffffff"); ctx.globalAlpha = 1;
@@ -1625,8 +1780,9 @@ function drawIntro(){
   ctx.globalAlpha = t > 2.1 ? Math.max(0, 1-(t-2.1)/0.2) : 1;
   px(0,116,W,74,"rgba(14,10,20,0.55)");
   ribbon(W/2-120+ox, 126, 240, 24, "#3d4a56", "#232d36", "#5d6b78");
-  txt("BATTLE I", W/2+ox, 144, 16, "#ffd75e", "center");
-  txt("HOLD THE CROSSING", W/2+ox, 170, 12, "#eef4f7", "center");
+  txt("BATTLE "+roman(G.battle), W/2+ox, 144, 16, "#ffd75e", "center");
+  txt(atmo().title, W/2+ox, 170, 12, "#eef4f7", "center");
+  txt(atmo().name, W/2+ox, 186, 8, "#b9c6cf", "center");
   ctx.globalAlpha = 1;
 }
 
@@ -1683,7 +1839,10 @@ function toInternal(e){
 function inBox(p,b){ return p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h; }
 
 function startBattle(){
-  unlockAudio(); reset();
+  unlockAudio();
+  if(G.started) G.battle++;              // each battle gets the next sky
+  G.started = true;
+  reset();
   G.speed = OPT.fastDefault ? 2 : 1;
   G.overlay = null;
   G.scene = "intro"; G.sceneT = 0;
