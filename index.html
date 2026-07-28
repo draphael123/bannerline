@@ -910,14 +910,14 @@ const TYPES = {
   },
   archer: {
     key:"archer", name:"ARCHER", cost:90, hp:55, speed:4.5,
-    reach:18, kite:11, kiteBudget:14, dmg:17, rate:0.85, cls:"light", ranged:true,
+    reach:18, dmg:17, rate:0.85, cls:"light", ranged:true,
     laneSpill:1,
     bonus:{ light:2.2 },
     beats:"SPEAR", hint:"Ranged, frail",
   },
   mage: {
     key:"mage", name:"MAGE", cost:100, hp:38, speed:4.0,
-    reach:16, kite:10, kiteBudget:10, dmg:21, rate:1.35, cls:"light",
+    reach:16, dmg:21, rate:1.35, cls:"light",
     ranged:true, laneSpill:2, aoe:7.5,
     beats:"CROWDS", hint:"Hits every lane. Paper.",
   },
@@ -963,15 +963,58 @@ function roster(){
 
 // A battle is a set of RULES, not just a bigger wave: terrain that closes
 // lanes, or a champion that walks in partway through.
+// A WORLD is a place with its own palette and its own rule. A LEVEL inside it
+// varies by objective, terrain and who the horde fields \u2014 cosmetics alone made
+// every battle feel the same.
+const WORLDS = [
+  { name:"THE GREEN MARCHES", short:"MARCHES",
+    ground:{p:"#6cc75f", pd:"#41984a", pl:"#93dc79", e:"#c4634a", ed:"#8b3f2f", el:"#dd8a6a"},
+    speed:1.00, income:1.00,
+    rule:"Open country. Nothing but them and you." },
+  { name:"THE FROSTREACH", short:"FROSTREACH",
+    ground:{p:"#bcd8e4", pd:"#7fa3b8", pl:"#e2f1f7", e:"#b08a92", ed:"#7c5b66", el:"#d4b0b4"},
+    speed:0.82, income:1.00,
+    rule:"Deep snow. Every soldier marches slower \u2014 both sides." },
+  { name:"THE EMBER WASTE", short:"EMBER",
+    ground:{p:"#c9a05e", pd:"#8e6a34", pl:"#e6c489", e:"#a34a34", ed:"#6d2a1e", el:"#c9705a"},
+    speed:1.00, income:1.24,
+    rule:"Scorched ground. Gold flows fast and the war burns hot." },
+];
+function world(){ return WORLDS[battle().world || 0]; }
+
 const BATTLES = [
-  { name:"HOLD THE CROSSING", atmo:0, blocked:[],     boss:null,
+  // --- I. THE GREEN MARCHES -------------------------------------------
+  { world:0, name:"HOLD THE CROSSING", atmo:0, blocked:[], boss:null,
+    objective:{type:"raze"},
     brief:"They came for the ford. Break their camp." },
-  { name:"THE NARROWS",       atmo:1, blocked:[0,4],
-    boss:{at:40, hpTrigger:0.45, type:"chieftain"},
+  { world:0, name:"THE NARROWS", atmo:1, blocked:[0,4],
+    boss:{at:40, hpTrigger:0.45, type:"chieftain"}, objective:{type:"raze"},
     brief:"Marsh closes both flanks. Three lanes only \u2014 and their chieftain waits." },
-  { name:"THE WARCHIEF",      atmo:2, blocked:[],
-    boss:{at:30, hpTrigger:0.62, type:"warchief"},
+  { world:0, name:"THE WARCHIEF", atmo:2, blocked:[],
+    boss:{at:30, hpTrigger:0.62, type:"warchief"}, objective:{type:"raze"},
     brief:"Their champion walks at you. Spears bring down armour." },
+  // --- II. THE FROSTREACH ---------------------------------------------
+  { world:1, name:"THE WHITE MARCH", atmo:3, blocked:[], boss:null,
+    comp:"swarm", objective:{type:"raze"},
+    brief:"They come in numbers across the snow. Numbers, not quality." },
+  { world:1, name:"THE FROZEN FORD", atmo:3, blocked:[2], boss:null,
+    comp:"heavy", objective:{type:"hold", count:5, seconds:18},
+    brief:"The river splits the field. HOLD five banners for eighteen seconds." },
+  { world:1, name:"THE ICE CHIEFTAIN", atmo:3, blocked:[],
+    boss:{at:34, hpTrigger:0.5, type:"chieftain"}, comp:"heavy",
+    objective:{type:"raze"},
+    brief:"Their chieftain has wintered here. He is bigger for it." },
+  // --- III. THE EMBER WASTE -------------------------------------------
+  { world:2, name:"ASH AND CINDER", atmo:4, blocked:[1,3], boss:null,
+    comp:"ranged", objective:{type:"raze"},
+    brief:"Lava scars the field. Their shamans hold the high ground." },
+  { world:2, name:"THE LONG SIEGE", atmo:4, blocked:[], boss:null,
+    comp:"swarm", objective:{type:"survive", seconds:70},
+    brief:"You cannot win this one. SURVIVE seventy seconds." },
+  { world:2, name:"THE WARCHIEF'S PYRE", atmo:4, blocked:[],
+    boss:{at:26, hpTrigger:0.7, type:"warchief"}, comp:"heavy",
+    objective:{type:"raze"},
+    brief:"The last of them. Kill the Warchief's host and be done." },
 ];
 
 // Difficulty scales the AI's GENERALSHIP and purse, never unit stats — you
@@ -1001,7 +1044,7 @@ function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
 const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army",
   ignorePortrait:false,
-  lane:2, laneFlash:0, bossOut:false,
+  lane:2, laneFlash:0, bossOut:false, holdT:0,
   hero:null, heroCd:0, heroDead:0, rallyFx:0,
   tut:{on:false, i:0, t:0, laneMoved:false},
   t:0, over:null, speed:1, paused:false,
@@ -1030,9 +1073,10 @@ function reset(){
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
   G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
   const kh = keepMaxHp();
-  G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:520,max:520,x:104,ruin:0};
+  const ek = (battle().objective||{}).type === "survive" ? 99999 : 520;
+  G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
-  G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false;
+  G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false; G.holdT=0;
   G.hero=null; G.heroCd=0; G.heroDead=0; G.rallyFx=0;
   G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
@@ -1066,7 +1110,7 @@ function spawn(typeKey, side, row){
     x: side>0 ? -2 : 102,
     y: ROW_Y[r] + (Math.random()*2-1)*1.5,
     hp:T.hp, maxHp:T.hp,
-    cd: 0.25 + Math.random()*0.3, kiteLeft: T.kiteBudget || 0,
+    cd: 0.25 + Math.random()*0.3,
     vox: (Math.random()*2-1)*1.7,
     vari: Math.floor(Math.random()*VARIANTS.length),
     flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0,
@@ -1256,7 +1300,7 @@ function attack(u, target){
 function attackKeep(u, keep){
   u.cd = u.T.rate; u.atkAnim = 0.24;
   const dmg = u.T.dmg * (u.T.ranged ? 0.30 : 0.85);
-  keep.hp -= dmg;
+  keep.hp = Math.max(0, keep.hp - dmg);
   pushNum(keep.x + (u.side>0?-4:4), -30, Math.round(dmg), "#ffe08a");
   G.shake = Math.max(G.shake, 2.6);
   G.hitstop = Math.max(G.hitstop, 0.05);
@@ -1304,7 +1348,8 @@ function goldRate(side){
   // musters harder when a champion rides against them - one lever that
   // actually scales with the thing causing the problem.
   const vsHero = (side < 0 && SAVE.hero) ? 1.18 : 1;
-  return base * terr * vsHero * (side < 0 ? diff().income * enemyOpening() : incomeMul());
+  const wm = world().income;
+  return base * terr * vsHero * wm * (side < 0 ? diff().income * enemyOpening() : incomeMul());
 }
 
 // Which lane the AI reinforces. At laneIQ 2 it reads the field: shore up the
@@ -1356,7 +1401,13 @@ function enemyBrain(dt){
   else if(pk >= D.counterAt){ want = "spear"; }
   else if(pa >= D.counterAt){ want = "knight"; commit = true; }
   else if(ps >= D.counterAt*2){ want = "archer"; commit = true; }
-  else { const r = Math.random(); want = r<0.55 ? "spear" : r<0.85 ? "knight" : "archer"; }
+  else {
+    const r = Math.random(), comp = battle().comp;
+    if(comp === "swarm")      want = r<0.80 ? "spear"  : r<0.93 ? "knight" : "archer";
+    else if(comp === "heavy") want = r<0.30 ? "spear"  : r<0.80 ? "knight" : "archer";
+    else if(comp === "ranged")want = r<0.34 ? "spear"  : r<0.50 ? "knight" : "archer";
+    else                      want = r<0.55 ? "spear"  : r<0.85 ? "knight" : "archer";
+  }
 
   const T = TYPES[want];
   if(G.eGold >= T.cost){ G.eGold -= T.cost; spawn(want, -1, aiLane(D)); return; }
@@ -1389,14 +1440,9 @@ function update(dt){
     const keepDist = Math.abs(keep.x - u.x);
     const keepReach = Math.min(T.reach, 9) + 2;
 
-    // KITE: archers give ground rather than let the line reach them.
-    if(T.kite && tgt && tgt.d < T.kite && u.kiteLeft > 0){
-      const back = -u.side, home = u.side>0 ? -3 : 103;
-      if((u.x - home) * u.side > 1){
-        const stepD = T.speed * 0.68 * dt;
-        u.x += stepD * back; u.kiteLeft -= stepD;
-      }
-    }
+    // Ranged units HOLD at their firing range - they stop advancing once a
+    // target is in reach (handled below). They never walk backwards; an
+    // army whose archers retreat out of a won fight reads as broken.
 
     let engaged = false;
     if(tgt && tgt.d <= T.reach){
@@ -1412,7 +1458,7 @@ function update(dt){
       const packed = ff && ff.d < 2.4;
       // SUPPLY LINE: you move fast across ground you own.
       const ownLand = u.side>0 ? (u.x < G.front - 2) : (u.x > G.front + 2);
-      const spd = T.speed * (ownLand ? 2.4 : 1);
+      const spd = T.speed * (ownLand ? 2.4 : 1) * world().speed;
       let moved = 0;
       if(!packed){ moved = spd*dt*u.side; u.x += moved; }
       else if(ff && ff.d < 3.4){ moved = spd*0.25*dt*u.side; u.x += moved; }
@@ -1512,13 +1558,26 @@ function update(dt){
     b.pop = Math.max(0, b.pop - dt*2.2);
   }
 
-  if(G.keepE.hp <= 0) endGame("VICTORY", "Their keep is rubble.");
-  else if(G.keepP.hp <= 0) endGame("DEFEAT", "Your keep has fallen.");
-  else if(G.timeLeft <= 0){
-    const pf = G.keepP.hp/G.keepP.max, ef = G.keepE.hp/G.keepE.max;
-    if(pf > ef) endGame("VICTORY", "Time. You held more keep.");
-    else if(ef > pf) endGame("DEFEAT", "Time. They held more keep.");
-    else endGame("STALEMATE", "Time. Dead even.");
+  // Every level asks for something different. Cosmetic variety was not
+  // enough to stop them all feeling the same.
+  const obj = battle().objective || {type:"raze"};
+  if(G.keepP.hp <= 0){
+    endGame("DEFEAT", "Your keep has fallen.");
+  } else if(obj.type === "hold"){
+    if(bannersHeld(1) >= obj.count) G.holdT += dt;
+    else G.holdT = Math.max(0, G.holdT - dt*0.6);
+    if(G.holdT >= obj.seconds) endGame("VICTORY", "The ground is yours.");
+    else if(G.timeLeft <= 0) endGame("DEFEAT", "Time. You never held it.");
+  } else if(obj.type === "survive"){
+    if(G.t >= obj.seconds) endGame("VICTORY", "You held the line.");
+  } else {
+    if(G.keepE.hp <= 0) endGame("VICTORY", "Their keep is rubble.");
+    else if(G.timeLeft <= 0){
+      const pf = G.keepP.hp/G.keepP.max, ef = G.keepE.hp/G.keepE.max;
+      if(pf > ef) endGame("VICTORY", "Time. You held more keep.");
+      else if(ef > pf) endGame("DEFEAT", "Time. They held more keep.");
+      else endGame("STALEMATE", "Time. Dead even.");
+    }
   }
   stepFx(dt);
 }
@@ -1725,6 +1784,9 @@ const ATMO = [
   { name:"DEEP WINTER", title:"THE WHITE CROSSING",
     skyHi:"#d2e6f4", skyLo:"#a6c3dc", water:"#4a7089",
     wash:{c:"#cfe2f7", a:0.21}, weather:"snow", clouds:"#ffffff" },
+  { name:"EMBER SKY", title:"THE BURNING FIELD",
+    skyHi:"#7a3040", skyLo:"#c2543a", water:"#5e2f33",
+    wash:{c:"#ff6a2a", a:0.20}, weather:"ash", clouds:"#8a4a44" },
 ];
 function battle(){ return BATTLES[Math.min(Math.max(1,G.battle), BATTLES.length)-1]; }
 function atmo(){ return G.scene==="title" ? ATMO[0] : ATMO[battle().atmo]; }
@@ -1757,6 +1819,15 @@ function drawWeather(){
     if(f < 0.10 || (f > 0.16 && f < 0.21)){
       ctx.globalAlpha = 0.30; px(0,0,W,H,"#dfe8ff"); ctx.globalAlpha = 1;
       glow(W/2, 150, 460, "rgba(210,230,255,1)", 0.5);
+    }
+  } else if(A.weather === "ash"){
+    for(let i=0;i<60;i++){
+      const t = (G.wind*0.30 + i*0.0167) % 1;
+      const ax = ((i*151) % (W+40)) - 20 + Math.sin(G.wind*0.7 + i)*12;
+      const ay = -8 + t*(H+16);
+      ctx.globalAlpha = 0.6*(1-t*0.4);
+      px(ax, ay, i%4?1:2, i%4?1:2, i%3 ? "#ffb46a" : "#7a6a66");
+      ctx.globalAlpha = 1;
     }
   } else if(A.weather === "snow"){
     for(let i=0;i<70;i++){
@@ -1803,21 +1874,25 @@ function drawWater(){
   for(let i=0;i<W;i+=6) px(i, 130+Math.sin(i*0.09+G.t*1.6)*2, 5, 3, P.foam);
 }
 function drawFarBank(){
-  px(0,132,W,38,P.grassFar);
-  px(0,132,W,4,P.grassL);
-  px(0,164,W,6,P.grassFarD);
+  const g = world().ground;
+  px(0,132,W,38,g.pd);
+  px(0,132,W,4,g.pl);
+  px(0,164,W,6,g.ed);
   for(const s of SCENERY.far){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
+  // wash the baked scenery toward this world's palette
+  ctx.globalAlpha = 0.34; px(0,132,W,42,g.p); ctx.globalAlpha = 1;
 }
 
 // The whole contested band is coloured by who owns it. This IS the game — if
 // you can't read the front line at a glance, nothing else matters.
 function drawTerritory(){
   const fx = sx(G.front), h = BAND_BOT - BAND_TOP;
+  const G_ = world().ground;
   for(let x=0; x<W; x+=4){
     let owned = x < fx;
     const edge = Math.abs(x - fx);
     if(edge < 18 && Math.sin(x*0.7 + G.t*2.5)*0.5+0.5 < 1 - edge/18) owned = !owned;
-    const c = owned?P.ownP:P.ownE, cd = owned?P.ownPd:P.ownEd, cl = owned?P.ownPl:P.ownEl;
+      const c = owned?G_.p:G_.e, cd = owned?G_.pd:G_.ed, cl = owned?G_.pl:G_.el;
     px(x, BAND_TOP, 4, 4, cl);
     px(x, BAND_TOP+4, 4, 4, cd);
     px(x, BAND_TOP+8, 4, h-12, c);
@@ -2165,10 +2240,12 @@ function drawCorpse(c){
 }
 
 function drawFore(){
-  px(0,BAND_BOT,W,300-BAND_BOT,P.grass);
-  px(0,BAND_BOT,W,4,P.grassL);
-  px(0,296,W,4,P.grassD);
+  const g = world().ground;
+  px(0,BAND_BOT,W,300-BAND_BOT,g.pd);
+  px(0,BAND_BOT,W,4,g.pl);
+  px(0,296,W,4,g.ed);
   for(const s of SCENERY.fore){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
+  ctx.globalAlpha = 0.28; px(0,BAND_BOT,W,300-BAND_BOT,g.p); ctx.globalAlpha = 1;
 }
 
 function drawFx(){
@@ -2435,9 +2512,21 @@ function drawHUD(){
 
   // top bar
   ribbon(W/2-84, 34, 168, 17, "#4a5560", "#2f3843", "#6d7a86");
-  const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "HOLDING";
-  const dc  = G.front > 50.5 ? "#9ff0d0" : G.front < 49.5 ? "#ffb0a0" : "#e8e0c8";
-  txt("FRONT LINE: "+dir, W/2, 46, 9, dc, "center");
+  const obj = battle().objective || {type:"raze"};
+  let line, dc;
+  if(obj.type === "hold"){
+    const held = bannersHeld(1);
+    line = "HOLD "+obj.count+" FLAGS  "+Math.floor(G.holdT)+"/"+obj.seconds+"s   ("+held+" held)";
+    dc = held >= obj.count ? "#9ff0d0" : "#ffd0a0";
+  } else if(obj.type === "survive"){
+    line = "SURVIVE   "+Math.max(0, Math.ceil(obj.seconds - G.t))+"s";
+    dc = "#ffd0a0";
+  } else {
+    const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "HOLDING";
+    line = "FRONT LINE: "+dir;
+    dc = G.front > 50.5 ? "#9ff0d0" : G.front < 49.5 ? "#ffb0a0" : "#e8e0c8";
+  }
+  txt(line, W/2, 46, 9, dc, "center");
 
   panel(8, 6, 116, 20, P.panel, P.panelD, P.panelL, 2);
   txt("BANNERLINE", 16, 20, 11, P.cream, "left");
@@ -2455,6 +2544,11 @@ function drawHUD(){
         hoverGear?"#5d4630":P.panel, P.panelD, P.panelL, 2);
   ctx.drawImage(gearImg, GEAR_BTN.x+6, GEAR_BTN.y+4);
 
+  if((battle().objective||{}).type === "hold"){
+    const o = battle().objective;
+    capsule(W/2-70, 54, 140, 6, Math.min(1, G.holdT/o.seconds),
+            bannersHeld(1)>=o.count ? "#66d96e" : "#c08a1c", "#ffffff70");
+  }
   if(G.toastT > 0 && G.toast){
     const a = Math.min(1, G.toastT/0.7);
     ctx.globalAlpha = a;
@@ -2614,10 +2708,15 @@ function drawBattlefield(){
 //////////////////////////////////////////////////////////////////////////////
 // CAMPAIGN MAP + STORE
 //////////////////////////////////////////////////////////////////////////////
-const MAP_NODES = [{x:132,y:196},{x:320,y:150},{x:508,y:200}];
-const MAP_SHOP  = {x:W/2-70, y:262, w:140, h:26};
+// three worlds, three battles each — a row per world
+function mapNode(i){
+  const w = Math.floor(i/3), c = i%3;
+  return { x:150 + c*170, y:118 + w*66 };
+}
+const MAP_NODES = { length:9 };
+const MAP_SHOP  = {x:W/2-70, y:322, w:140, h:24};
 const MAP_BACK  = {x:12, y:8, w:74, h:22};
-function nodeBox(i){ return {x:MAP_NODES[i].x-26, y:MAP_NODES[i].y-26, w:52, h:52}; }
+function nodeBox(i){ const n=mapNode(i); return {x:n.x-23, y:n.y-23, w:46, h:46}; }
 
 function drawMap(){
   // parchment
@@ -2670,38 +2769,49 @@ function drawMap(){
   txt("N", cxr, cyr-18, 7, "#c9a227", "center", false);
 
   ribbon(W/2-92, 38, 184, 22, "#4a3a24", "#2c2115", "#6d5836");
-  txt("THE CAMPAIGN", W/2, 54, 15, "#ffd75e", "center");
+  txt("THE CAMPAIGN", W/2, 52, 14, "#ffd75e", "center");
   ctx.drawImage(coinImg, W/2-42, 66);
   txt(SAVE.renown+"  renown", W/2+8, 76, 10, "#e8dcc0", "center");
 
-  // route
-  for(let i=0;i<MAP_NODES.length-1;i++){
-    const a=MAP_NODES[i], b=MAP_NODES[i+1];
-    const done = SAVE.progress > i+1;
-    for(let t=0;t<1;t+=0.045){
-      const x=a.x+(b.x-a.x)*t, y=a.y+(b.y-a.y)*t + Math.sin(t*3.14)*-14;
+  // route within each world
+  for(let i=0;i<9;i++){
+    if(i%3===2) continue;
+    const a=mapNode(i), b=mapNode(i+1), done=SAVE.progress>i+1;
+    for(let t=0;t<1;t+=0.06){
+      const x=a.x+(b.x-a.x)*t, y=a.y+(b.y-a.y)*t;
       px(x-1,y-1,3,3, done?"#c9a227":"#5d4a30");
     }
   }
-  MAP_NODES.forEach((n,i)=>{
+  for(let wi=0; wi<3; wi++){
+    const first = wi*3;
+    const unlocked = SAVE.progress > first;
+    const n0 = mapNode(first);
+    txt(WORLDS[wi].short, 26, n0.y+3, 8,
+        unlocked?"#e8dcc0":"#6a6153", "left", false);
+    if(!unlocked) continue;
+    ctx.font='7px "Courier New",monospace'; ctx.textAlign="left";
+    ctx.fillStyle="#8a7e66"; ctx.fillText(WORLDS[wi].rule.slice(0,44), 26, n0.y+14);
+  }
+  for(let i=0;i<9;i++){
     const bn=i+1, done=SAVE.progress>bn, cur=SAVE.progress===bn, locked=SAVE.progress<bn;
-    const b=nodeBox(i);
-    const pulse = cur ? (0.6+Math.sin(G.wind*4)*0.4) : 1;
-    if(cur){ ctx.globalAlpha=pulse; rr(b.x-4,b.y-4,b.w+8,b.h+8,3,"#ffd75e"); ctx.globalAlpha=1; }
+    const b=nodeBox(i), n=mapNode(i);
+    if(cur){ ctx.globalAlpha=0.6+Math.sin(G.wind*4)*0.4;
+      rr(b.x-4,b.y-4,b.w+8,b.h+8,3,"#ffd75e"); ctx.globalAlpha=1; }
     panel(b.x,b.y,b.w,b.h, locked?"#3a3128":done?"#2f6b58":"#7a5a2a",
           P.panelD, locked?null:P.panelL, 3);
-    txt(locked?"?":roman(bn), b.x+b.w/2, b.y+b.h/2+6, 16,
+    txt(locked?"?":String(bn), b.x+b.w/2, b.y+b.h/2+5, 13,
         locked?"#6a6153":done?"#a8ffd8":"#ffe9a8", "center");
-    txt(BATTLES[i].name, n.x, n.y+42, 8,
-        locked?"#6a6153":"#e8dcc0", "center");
-    if(done) txt("CLEARED", n.x, n.y+54, 7, "#7fd6bd", "center", false);
-  });
-
+    if(!locked){
+      const o = BATTLES[i].objective.type;
+      txt(BATTLES[i].name.slice(0,15), n.x, n.y+32, 6, "#d8cdb4", "center", false);
+      if(o!=="raze") txt(o.toUpperCase(), n.x, n.y+40, 6, "#9fd6bd", "center", false);
+    }
+  }
   mbtn({...MAP_SHOP, label:"THE QUARTERMASTER"}, hoverMenu==="SHOP");
   mbtn({...MAP_BACK, label:"TITLE"}, hoverMenu==="MAPBACK");
-  if(SAVE.won) txt("CAMPAIGN COMPLETE", W/2, 314, 11, "#a8ffd8", "center");
-  else txt("choose your battle", W/2, 314, 8, "#b0a48c", "center");
-  txt("progress saves automatically", W/2, 336, 7, "#8a8070", "center", false);
+  if(SAVE.won) txt("CAMPAIGN COMPLETE", W/2, 306, 11, "#a8ffd8", "center");
+  else txt("choose your battle", W/2, 306, 8, "#b0a48c", "center");
+
 }
 
 const SHOP_BACK = {x:W/2-70, y:312, w:140, h:26};
@@ -2990,7 +3100,8 @@ function drawIntro(){
   ribbon(W/2-120+ox, 126, 240, 24, "#3d4a56", "#232d36", "#5d6b78");
   txt("BATTLE "+roman(G.battle), W/2+ox, 144, 16, "#ffd75e", "center");
   txt(atmo().title, W/2+ox, 170, 12, "#eef4f7", "center");
-  txt(atmo().name + "   \u2022   " + diff().name, W/2+ox, 186, 8, "#b9c6cf", "center");
+  txt(world().name + "   \u2022   " + diff().name, W/2+ox, 186, 8, "#b9c6cf", "center");
+  txt(battle().brief, W/2+ox, 202, 7, "#9aa8b2", "center", false);
   ctx.globalAlpha = 1;
 }
 
@@ -3105,7 +3216,7 @@ cv.addEventListener("mousemove", e=>{
   } else if(G.scene==="map"){
     if(inBox(p,MAP_SHOP)){ hoverMenu="SHOP"; hot=true; }
     if(inBox(p,MAP_BACK)){ hoverMenu="MAPBACK"; hot=true; }
-    MAP_NODES.forEach((n,i)=>{ if(SAVE.progress>=i+1 && inBox(p,nodeBox(i))) hot=true; });
+    for(let i=0;i<9;i++) if(SAVE.progress>=i+1 && inBox(p,nodeBox(i))) hot=true;
   } else if(G.scene==="shop"){
     for(let i=0;i<SHOP_TABS.length;i++) if(inBox(p,shopTab(i))) hot=true;
     if(G.shopTab==="heroes"){
@@ -3139,10 +3250,10 @@ cv.addEventListener("pointerdown", e=>{
   if(G.scene==="map"){
     if(inBox(p,MAP_SHOP)){ G.scene="shop"; tone(600,0.08,"square",0.05,1.3); return; }
     if(inBox(p,MAP_BACK)){ G.scene="title"; G.sceneT=0; return; }
-    MAP_NODES.forEach((n,i)=>{
-      if(SAVE.progress < i+1) return;              // locked
-      if(inBox(p, nodeBox(i))){ G.battle=i+1; startBattle(); }
-    });
+    for(let i=0;i<9;i++){
+      if(SAVE.progress < i+1) continue;            // locked
+      if(inBox(p, nodeBox(i))){ G.battle=i+1; startBattle(); break; }
+    }
     return;
   }
   if(G.scene==="bestiary"){

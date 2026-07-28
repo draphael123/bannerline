@@ -23,7 +23,7 @@ SPEAR ──beats──▶ KNIGHT ──beats──▶ ARCHER ──beats──�
 
 - **Spearman — 30g.** Cheap, fast, fragile. Braced spears gut armour.
 - **Knight — 60g.** A wall: 300 HP, low damage. Holds frontage, doesn't farm swarms.
-- **Archer — 90g.** Ranged, frail. Backs away rather than fight, so it needs a line in front of it.
+- **Archer — 90g.** Ranged, frail. Holds at firing range and needs a line in front of it.
 
 Battles run 3 minutes. If nobody's keep falls, whoever holds more keep HP wins.
 
@@ -37,25 +37,24 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 **Territory pays income.** Each banner you hold raises your gold rate (`TERR_K`, anchored so the starting 3-banner split is exactly 1.0×). Before this, banners were pure decoration and two even economies ground to a 180-second timeout **75% of the time** — measured, 21-sample mirror. Tying income to ground held turns a positional lead into an economic one, so leads convert instead of stalling. Stalemates went from 16/21 to 0/21.
 
-**Archers kite slowly, on a budget, and barely scratch stone.** They retreat at 0.68× speed with a 14-unit total budget, then stand and die — otherwise an unkillable archer ball forms. They also do 0.30× damage to keeps, so archers alone can't siege.
+**Ranged units hold at range and never retreat.** They stop advancing once a target is in reach. An earlier version had them walk backwards to avoid melee, which made your own line appear to rout — stopping is the fix, retreating never was. They also do 0.30× damage to keeps, so archers alone can't siege.
 
 ## The campaign
 
-Three battles, each with its own **rules** rather than just a bigger wave:
+**Three worlds, three battles each.** A world has its own palette and its own standing rule; a level inside it varies by objective, terrain and who the horde fields.
 
-| | Battle | Twist |
-|---|---|---|
-| I | Hold the Crossing | The baseline fight, clear day. |
-| II | The Narrows | Marsh closes both outer lanes — three lanes only, you cannot spread. Dusk. |
-| III | The Warchief | A 1050 HP champion walks in partway through. Storm. |
+| World | Rule |
+|---|---|
+| **The Green Marches** | Open country. |
+| **The Frostreach** | Deep snow — every soldier marches 18% slower, both sides. |
+| **The Ember Waste** | Scorched ground — gold flows 24% faster and the war burns hot. |
 
-**Every battle after the first has a boss** — they double as the horde's champions. Battle II fields the **Chieftain** (500 HP, twin axes); battle III the **Warchief** (1050 HP). Both are `heavy`, so massed spears bring them down.
+Levels differ by more than scenery, which was the actual reason they felt samey:
 
-⚠️ The Warchief shipped with **no working weakness**. Spears are its designed counter (3.2× vs heavy), but its 6.0-wide cleave farmed the single-file lane queue while only the front unit could hit back — the exact bug I had already fixed for the Knight, reintroduced at double the radius. Worse, it had `laneSpill:1` while melee has 0, so it attacked three lanes while only one could attack it: 300g of spears one lane over did **literally zero damage**. Fixed with a `bigTarget` flag (large units are reachable from neighbouring lanes), cleave cut to 3.2/0.35, and 1050 HP. Now 300g of spears kills it in ~16s with survivors, while the same gold in knights, archers or mages all fail.
-
-The Warchief triggers on **time or a last stand** (their keep dropping below 62%), whichever comes first — on a purely timed trigger a fast win meant you never met it. It's `heavy` class, so spears bring it down: the boss teaches the triangle rather than bypassing it.
-
-Terrain is enforced everywhere, not just for the player — blocked lanes reject spawns from both sides, and the AI's lane logic skips them.
+- **Objective** — `raze` their keep, `hold` five flags for eighteen seconds, or `survive` seventy seconds against a keep you cannot break.
+- **Terrain** — marsh or a frozen river closing lanes, enforced for both sides.
+- **Composition** — the horde fields a swarm, a heavy column, or a shaman line.
+- **Boss** — every battle after the first has one. The **Chieftain** (500 HP) and the **Warchief** (1050 HP) are both `heavy`, so massed spears bring them down.
 
 ## Lanes
 
