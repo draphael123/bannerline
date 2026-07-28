@@ -160,6 +160,8 @@ Two **factions**, not a palette swap: blue-and-steel humans versus a green gobli
 
 **Depth by rank.** Back rows draw ~14% smaller from pre-dimmed sprite variants, front rows at full size and contrast. Without it a twenty-unit scrum reads as a flat sticker sheet.
 
+**A three-phase attack from two frames.** Rather than draw a wind-up pose for all twelve unit types, the attack frame is drawn *pulled back* during the wind-up and *thrown forward* on the strike, then settles. It reads as one motion — guard, wind up, strike, recover — with no new art. Units also breathe on guard and recoil when struck.
+
 **A 4-beat gait.** Units walk on a proper contact/passing/contact/passing cycle with body bob and arm swing, not a 2-frame shuffle — five baked frames per unit per side (four walk, one attack).
 
 **Combat reads in motion.** Units topple and fall rather than vanishing, pivoting at the feet away from the blow. Melee swings draw an arc with a spark at the point of impact, cleaves get a bigger, hotter one, and arrows stick in their target for a moment.

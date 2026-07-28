@@ -1220,7 +1220,7 @@ function spawn(typeKey, side, row){
     cd: 0.25 + Math.random()*0.3,
     vox: (Math.random()*2-1)*1.7,
     vari: Math.floor(Math.random()*VARIANTS.length),
-    flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0, slide:0,
+    flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0, slide:0, fighting:false,
     pop:1, step:Math.random()*6.28, lastStep:0,
   };
   G.units.push(u);
@@ -1653,6 +1653,7 @@ function update(dt){
       }
     }
 
+    u.fighting = engaged;            // cosmetic: drives the guard/wind-up pose
     for(const o of G.units){
       if(o.dead || o===u || o.row!==u.row) continue;
       const dx = o.x - u.x;
@@ -2343,14 +2344,30 @@ function rankScale(row){ return 0.86 + (row/(ROWS-1))*0.22; }
 
 function drawUnit(u){
   const S = SPR[u.type][u.side];
-  const frame = u.atkAnim > 0.06 ? 4 : (Math.floor(u.bob*0.8) % 4);
+  const T = u.T;
+  // THREE-PHASE ATTACK from two baked frames. Rather than draw a wind-up
+  // pose for all twelve unit types, the attack frame is drawn PULLED BACK
+  // during the wind-up and EXTENDED on the strike, which reads as one motion.
+  let frame, lunge = 0, sag = 0;
+  if(u.atkAnim > 0.14){                      // strike: thrown forward
+    frame = 4; lunge = Math.round((u.atkAnim-0.10)*46)*u.side;
+  } else if(u.atkAnim > 0){                  // recover: settling back
+    frame = 4; lunge = Math.round(u.atkAnim*10)*u.side;
+  } else if(u.fighting && u.cd < 0.22 && u.cd > 0){
+    frame = 4; lunge = -Math.round((0.22-u.cd)*22)*u.side;   // wind-up
+  } else if(u.fighting){
+    frame = 0;                               // guard: planted, not striding
+    sag = Math.sin(u.bob*0.55) < 0 ? 1 : 0;  // slow breath
+  } else {
+    frame = Math.floor(u.bob*0.8) % 4;       // marching
+  }
+  if(u.flash > 0) lunge -= 2*u.side;         // recoil from a hit
   const img = u.flash > 0 ? S.flashes[frame]
             : u.row <= 1  ? S.far[frame]
             :               S.frames[(u.vari||0)*FRAMES + frame];
   const k = rankScale(u.row);
-  const lunge = u.atkAnim > 0 ? Math.round(u.atkAnim*14)*u.side : 0;
   const x = Math.round(sx(u.x + u.vox)) + lunge;
-  const y = Math.round(GROUND_Y + u.y);
+  const y = Math.round(GROUND_Y + u.y) + sag;
   const pop = u.pop;                          // spawn squash, then settle
   const sw = k * (1 + pop*0.5), sh = k * (1 - pop*0.35);
   const dw = Math.round(S.w*sw), dh = Math.round(S.h*sh);
@@ -2506,14 +2523,22 @@ function drawFx(){
 }
 
 // ---- HUD ------------------------------------------------------------------
-const CARD_H = 38, CARD_GAP = 10, CARD_Y = 318;
-function cardW(){ return roster().length > 3 ? 144 : 148; }
+const CARD_H = 38, CARD_GAP = 8, CARD_Y = 318;
+// Lay the bar out inside a region bounded by the hero button on the left and
+// the lane column on the right, instead of centring on the whole screen.
+function cardBand(){
+  return { l: (SAVE.hero ? 72 : 10), r: W - 38 };
+}
+function cardW(){
+  const b = cardBand(), n = roster().length;
+  return Math.min(150, Math.floor((b.r - b.l - (n-1)*CARD_GAP) / n));
+}
 function cardRect(i){
   const n = roster().length;
-  const CW = cardW();
+  const CW = cardW(), b = cardBand();
   const total = n*CW + (n-1)*CARD_GAP;
-  const off = SAVE.hero ? 30 : 0;      // make room for the hero button
-  return { x:(W-total)/2 + off + i*(CW+CARD_GAP), y:CARD_Y, w:CW, h:CARD_H };
+  const x0 = b.l + Math.max(0, ((b.r - b.l) - total) / 2);
+  return { x:Math.round(x0 + i*(CW+CARD_GAP)), y:CARD_Y, w:CW, h:CARD_H };
 }
 const SPEED_BTN = {x:W/2-26, y:6, w:52, h:20};
 const GEAR_BTN  = {x:W-34, y:6, w:26, h:20};
@@ -2710,9 +2735,31 @@ function drawHeroButton(){
       HERO_BTN.y+35, 7, ready?"#ffe9a8":"#8a8070", "center", false);
 }
 
+const LANE_COL = {x:W-30, y:CARD_Y-2, w:22, h:CARD_H+4};
+function drawLaneColumn(){
+  panel(LANE_COL.x, LANE_COL.y, LANE_COL.w, LANE_COL.h, P.panel, P.panelD, P.panelL, 2);
+  const n = ROWS, cell = (LANE_COL.h-8) / n;
+  for(let i=0;i<n;i++){
+    const y = LANE_COL.y + 4 + i*cell;
+    const on = i === G.lane, open = laneOpen(i);
+    if(!open){
+      px(LANE_COL.x+5, y+1, LANE_COL.w-10, cell-2, "#2a2118");
+      px(LANE_COL.x+6, y+2, LANE_COL.w-12, 1, "#4a3a28");
+      continue;
+    }
+    px(LANE_COL.x+4, y, LANE_COL.w-8, cell-1, on ? "#ffd75e" : "#5d4630");
+    if(on){
+      px(LANE_COL.x+1, y+1, 2, cell-3, "#fff3c8");
+      px(LANE_COL.x+LANE_COL.w-3, y+1, 2, cell-3, "#fff3c8");
+    }
+  }
+  txt("LANE", LANE_COL.x+LANE_COL.w/2, LANE_COL.y-4, 6, "#a89c84", "center", false);
+}
+
 function drawHUD(){
   drawTray();
   drawHeroButton();
+  drawLaneColumn();
 
   // gold capsule — sits ABOVE the cards, never behind them
   const gx = 52, gw = W-196;
@@ -2721,11 +2768,13 @@ function drawHUD(){
   txt(Math.floor(G.gold)+" / "+G.goldMax, gx+gw/2, 313, 9, "#fff6d2", "center");
   // income, so the territory→economy link is legible at a glance
   const bh = bannersHeld(1);
-  txt("+"+goldRate(1).toFixed(0)+"/s", W-104, 313, 9,
-      bh>3?"#a8ffd8":bh<3?"#ffb0a0":"#e8dcc0", "left");
-  txt(bh+"/6 FLAGS", W-16, 313, 8,
-      bh>3?"#a8ffd8":bh<3?"#ffb0a0":"#c9bda4", "right");
-  txt("LANE "+(G.lane+1)+"  [\u2191\u2193]", 92, 313, 8, "#ffe9a8", "left");
+  const inc = bh>3?"#a8ffd8":bh<3?"#ffb0a0":"#e8dcc0";
+  rr(W-132, 303, 60, 13, 2, "#33261a");
+  txt("+"+goldRate(1).toFixed(0)+"/s", W-102, 313, 9, inc, "center", false);
+  rr(W-66, 303, 54, 13, 2, "#33261a");
+  for(let i=0;i<6;i++)
+    px(W-61+i*8, 307, 6, 5, i<bh ? "#f5c53f" : "#584835");
+
 
   roster().forEach((k,i)=>{
     const T = TYPES[k], r = cardRect(i);
@@ -2748,14 +2797,30 @@ function drawHUD(){
       Math.round(S.w*sc), Math.round(S.h*sc));
     ctx.globalAlpha = 1;
 
-    txt(T.name, r.x+44, y+13, 9, afford?"#3a2a18":"#4a4640", "left", false);
+    // at five cards the bar is narrow; clip the name rather than let it
+    // run under the hotkey badge
+    const room = Math.floor((r.w - 62) / 4.6);
+    txt(T.name.slice(0, Math.max(3, room)), r.x+40, y+13, 9,
+        afford?"#3a2a18":"#4a4640", "left", false);
     ctx.font='bold 7px "Courier New",monospace'; ctx.textAlign="left";
-    ctx.fillStyle = afford?"#2f7d5e":"#5a5248"; ctx.fillText("BEATS "+T.beats, r.x+44, y+24);
-    ctx.fillStyle = afford?"#8a7350":"#5a5248"; ctx.fillText(T.hint, r.x+44, y+34);
+    ctx.fillStyle = afford?"#2f7d5e":"#5a5248";
+    ctx.fillText(("BEATS "+T.beats).slice(0, Math.max(5, Math.floor((r.w-46)/4))), r.x+40, y+24);
+    ctx.fillStyle = afford?"#8a7350":"#5a5248";
+    ctx.fillText(T.hint.slice(0, Math.max(5, Math.floor((r.w-46)/4))), r.x+40, y+34);
 
-    ctx.drawImage(coinImg, r.x+r.w-38, y+19);
-    txt(T.cost, r.x+r.w-24, y+28, 11, afford?"#2a1e10":"#5a5248", "left", false);
-    txt("["+(i+1)+"]", r.x+r.w-6, y+13, 8, afford?"#a08858":"#5a5248", "right", false);
+    // cost pill - reads as a price tag rather than a number floating on wood
+    const pw2 = 42, pxx = r.x+r.w-pw2-5, pyy = y+r.h-17;
+    rr(pxx-1, pyy-1, pw2+2, 15, 2, OL);
+    rr(pxx, pyy, pw2, 13, 2, afford ? "#6b5220" : "#413a31");
+    ctx.drawImage(coinImg, pxx+2, pyy+1);
+    txt(T.cost, pxx+pw2-4, pyy+10, 10, afford?"#ffe9a8":"#6a6153", "right", false);
+    // hotkey badge
+    rr(r.x+r.w-19, y+4, 15, 12, 2, afford ? "#8a6a3a" : "#4a4238");
+    txt(String(i+1), r.x+r.w-11, y+13, 8, afford?"#2a1e10":"#6a6153", "center", false);
+    if(!afford){                        // how close you are to affording it
+      const frac = Math.min(1, G.gold / T.cost);
+      px(r.x+2, y+r.h-3, Math.round((r.w-4)*frac), 2, "#7a6a3a");
+    }
   });
 
   // top bar
@@ -2781,8 +2846,11 @@ function drawHUD(){
     txt(t, W/2, 63, 7, "#ffc98a", "center", false);
   }
 
-  panel(8, 6, 116, 20, P.panel, P.panelD, P.panelL, 2);
-  txt("BANNERLINE", 16, 20, 11, P.cream, "left");
+  // this corner used to hold the game's own name, which the player already
+  // knows. It now holds the thing they most need: which battle, and where.
+  panel(8, 6, 150, 20, P.panel, P.panelD, P.panelL, 2);
+  txt(roman(G.battle)+".", 16, 20, 10, "#ffd75e", "left");
+  txt(battle().name.slice(0,17), 32, 20, 8, P.cream, "left", false);
 
   const m = Math.floor(G.timeLeft/60), s = Math.floor(G.timeLeft%60);
   panel(W-114, 6, 74, 20, P.panel, P.panelD, P.panelL, 2);
