@@ -61,7 +61,7 @@ const P = {
 let AC = null, MASTER = null;
 // Player options. Persisted to localStorage so they survive a reload.
 const OPT = { music:0.7, sfx:0.8, shake:true, dmgNums:true, fastDefault:false,
-              difficulty:0, tutorialDone:false };
+              difficulty:0, tutorialDone:false, introSeen:false };
 try{
   const raw = localStorage.getItem("bannerline.opt");
   if(raw) Object.assign(OPT, JSON.parse(raw));
@@ -1060,7 +1060,7 @@ function enemyOpening(){
 function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
 
 const G = {
-  scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army",
+  scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army", beat:0,
   ignorePortrait:false,
   lane:2, laneFlash:0, bossOut:false, holdT:0,
   hero:null, heroCd:0, heroDead:0, rallyFx:0,
@@ -2341,9 +2341,10 @@ const SETTINGS_ROWS = [
   {key:"dmgNums",     label:"DAMAGE NUMBERS", type:"toggle"},
   {key:"fastDefault", label:"START AT 2x",    type:"toggle"},
   {key:"replayTut",   label:"REPLAY TUTORIAL",type:"action"},
+  {key:"replayIntro", label:"REPLAY OPENING", type:"action"},
 ];
 function settingsLayout(){
-  const x=W/2-142, y0=108, rh=27;
+  const x=W/2-142, y0=84, rh=26;
   const rows = SETTINGS_ROWS.map((r,i)=>{
     const y = y0+i*rh;
     const o = {...r, x, y, w:284, h:23};
@@ -2362,7 +2363,7 @@ function settingsLayout(){
     }
     return o;
   });
-  return {rows, back:{label:"BACK", x:W/2-75, y:y0+SETTINGS_ROWS.length*rh+12, w:150, h:28}};
+  return {rows, back:{label:"BACK", x:W/2-75, y:y0+SETTINGS_ROWS.length*rh+8, w:150, h:24}};
 }
 
 function mbtn(b, hot, tone_){
@@ -2379,23 +2380,42 @@ function drawPauseMenu(){
 }
 
 function drawSettingsMenu(){
-  px(0,0,W,H,"rgba(10,8,16,0.78)");
-  txt("SETTINGS", W/2, 88, 22, "#ffd75e", "center");
+  px(0,0,W,H,"rgba(10,8,16,0.80)");
+  // a proper framed page rather than rows floating on a scrim
+  const px0 = 84, py0 = 26, pw = W-168, ph = 318;
+  panel(px0, py0, pw, ph, "#241c2c", "#120d18", "#4a3d5c", 3);
+  for(let y=py0+4; y<py0+ph-4; y+=4)
+    for(let x=px0+4+((y/4)%2)*4; x<px0+pw-4; x+=8) px(x,y,4,4,"#291f34");
+  px(px0+6, py0+6, pw-12, 2, "#4a3d5c");
+  px(px0+6, py0+ph-8, pw-12, 2, "#4a3d5c");
+
+  ribbon(W/2-72, py0+6, 144, 20, "#4a3a24", "#2c2115", "#6d5836");
+  txt("SETTINGS", W/2, py0+21, 13, "#ffd75e", "center");
+
   const L = settingsLayout();
   for(const r of L.rows){
-    panel(r.x, r.y, r.w, r.h, "#33261a", P.panelD, P.panelL, 2);
-    txt(r.label, r.x+10, r.y+16, 9, P.cream, "left", false);
+    const hot = hoverMenu && hoverMenu.indexOf(r.key) === 0;
+    panel(r.x, r.y, r.w, r.h, hot?"#3d3048":"#33261a", P.panelD, P.panelL, 2);
+    px(r.x+3, r.y+3, 2, r.h-6, hot ? "#ffd75e" : "#5d4630");
+    txt(r.label, r.x+12, r.y+16, 9, hot?"#fff3c8":P.cream, "left", false);
     if(r.type==="choice"){
       mbtn({...r.minus, label:"<"}, hoverMenu===r.key+"-");
-      panel(r.val.x, r.val.y, r.val.w, r.val.h, "#4a3a2a", P.panelD, P.panelL, 2);
-      txt(DIFF[OPT.difficulty].name, r.val.x+r.val.w/2, r.val.y+12, 9,
-          "#ffe9a8", "center", false);
+      const D = DIFF[OPT.difficulty];
+      panel(r.val.x, r.val.y, r.val.w, r.val.h, "#4a3a2a", P.panelD, P.goldL, 2);
+      // a filled pip row so the tier reads as a level, not just a word
+      for(let i=0;i<DIFF.length;i++)
+        px(r.val.x+6+i*5, r.val.y+r.val.h-5, 3, 2,
+           i<=OPT.difficulty ? "#ffd75e" : "#5d4630");
+      txt(D.name, r.val.x+r.val.w/2, r.val.y+11, 9, "#ffe9a8", "center", false);
       mbtn({...r.plus, label:">"}, hoverMenu===r.key+"+");
     } else if(r.type==="slider"){
       mbtn({...r.minus, label:"-"}, hoverMenu===r.key+"-");
       const v = OPT[r.key];
       capsule(r.bar.x, r.bar.y, r.bar.w, r.bar.h, v, v>0?P.gold:"#6a5a44", P.goldL);
-      txt(Math.round(v*100)+"%", r.bar.x+r.bar.w/2, r.bar.y+8, 8,
+      // notches so the steps are visible
+      for(let i=1;i<10;i++)
+        px(r.bar.x + Math.round(r.bar.w*i/10), r.bar.y, 1, r.bar.h, "#00000030");
+      txt(v>0 ? Math.round(v*100)+"%" : "OFF", r.bar.x+r.bar.w/2, r.bar.y+8, 8,
           v>0?"#2a1e10":"#a09080", "center", false);
       mbtn({...r.plus, label:"+"}, hoverMenu===r.key+"+");
     } else if(r.type==="action"){
@@ -2404,11 +2424,16 @@ function drawSettingsMenu(){
       const on = !!OPT[r.key];
       panel(r.tog.x, r.tog.y, r.tog.w, r.tog.h,
             on?"#2f6b58":"#4a3a2a", P.panelD, on?"#4a9a80":P.panelL, 2);
-      txt(on?"ON":"OFF", r.tog.x+r.tog.w/2, r.tog.y+12, 9,
-          on?"#a8ffd8":"#b0a48c", "center", false);
+      // a sliding knob reads as a switch, not a label
+      const kx = on ? r.tog.x+r.tog.w-18 : r.tog.x+3;
+      px(kx, r.tog.y+3, 15, r.tog.h-6, on?"#a8ffd8":"#8a8070");
+      px(kx, r.tog.y+3, 15, 2, on?"#d8fff0":"#a09888");
+      txt(on?"ON":"OFF", on ? r.tog.x+16 : r.tog.x+r.tog.w-16, r.tog.y+12, 8,
+          on?"#d8fff0":"#c0b6a8", "center", false);
     }
   }
   mbtn(L.back, hoverMenu==="BACK");
+  txt("settings save automatically", W/2, py0+ph-9, 7, "#7a6d8a", "center", false);
 }
 
 function menuClick(p){
@@ -2437,8 +2462,14 @@ function menuClick(p){
         if(inBox(p,r.plus)) { OPT[r.key]=Math.min(1, +(OPT[r.key]+0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(700,0.05,"square",0.04); return true; }
         if(inBox(p,r.bar))  { OPT[r.key]=Math.max(0,Math.min(1,(p.x-r.bar.x)/r.bar.w)); applyVolumes(); saveOpt(); return true; }
       } else if(r.type==="action" && inBox(p,r.tog)){
-        G.overlay=null; OPT.tutorialDone=false; saveOpt();
-        G.started=false; startBattle();
+        G.overlay=null;
+        if(r.key==="replayIntro"){
+          OPT.introSeen=false; saveOpt();
+          G.scene="opening"; G.sceneT=0; G.beat=0;
+        } else {
+          OPT.tutorialDone=false; saveOpt();
+          G.started=false; startBattle();
+        }
         return true;
       } else if(inBox(p,r.tog)){
         OPT[r.key] = !OPT[r.key]; saveOpt();
@@ -2958,6 +2989,74 @@ function shopClick(p){
   return true;
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// OPENING
+// Four beats over the same battlefield the game is played on, so the opening
+// reads as this place rather than a separate slideshow. Any input skips.
+//////////////////////////////////////////////////////////////////////////////
+const OPENING = [
+  { t:3.6, line:"The marches have been quiet for a hundred years.",
+    sub:"Grain, river mist, and nobody's war." },
+  { t:3.8, line:"They came at dawn, out of the eastern waste.",
+    sub:"No demands. No parley. Just the drums." },
+  { t:3.8, line:"One keep stands between them and the heartland.",
+    sub:"Yours." },
+  { t:3.2, line:"", sub:"" },
+];
+function openingTick(dt){
+  G.sceneT += dt;
+  const b = OPENING[G.beat];
+  if(!b) { openingDone(); return; }
+  if(G.sceneT >= b.t){ G.beat++; G.sceneT = 0;
+    if(G.beat >= OPENING.length) openingDone();
+    else tone(220 + G.beat*60, 0.22, "triangle", 0.04, 1.2);
+  }
+}
+function openingDone(){
+  OPT.introSeen = true; saveOpt();
+  G.scene = "title"; G.sceneT = 0; G.beat = 0;
+}
+function drawOpening(){
+  const beat = Math.min(G.beat, OPENING.length-1);
+  drawHomeScene();
+  // the horde gathers on the right as the beats progress
+  if(beat >= 1){
+    const n = beat === 1 ? 5 : 9;
+    for(let i=0;i<n;i++){
+      const S = SPR[["spear","knight","archer"][i%3]][-1];
+      const x = 596 - (i%5)*17 - (i>4?9:0);
+      const y = GROUND_Y + ROW_Y[(i*2)%ROWS]*0.7;
+      ctx.globalAlpha = 0.55 + (i%3)*0.15;
+      ctx.drawImage(S.frames[i%2], x - S.w/2, y - S.h);
+      ctx.globalAlpha = 1;
+    }
+    glow(600, GROUND_Y-40, 90, "rgba(200,60,40,1)", 0.28 + (beat>=2?0.12:0));
+  }
+  px(0,0,W,H, beat===3 ? "rgba(10,8,16,0.72)" : "rgba(10,8,16,0.40)");
+
+  if(beat === 3){
+    const bob = Math.sin(G.sceneT*2.2)*2;
+    txt("BANNERLINE", W/2, 150+bob, 42, "#f7e9b8", "center");
+    txt("BANNERLINE", W/2, 149+bob, 42, "#ffd75e", "center", false);
+    ribbon(W/2-96, 168, 192, 18, "#4a5560", "#2f3843", "#6d7a86");
+    txt("HOLD THE LINE", W/2, 181, 9, "#dfe7ec", "center");
+  } else {
+    const b = OPENING[beat];
+    const fade = Math.min(1, G.sceneT*1.8) * Math.min(1, (b.t-G.sceneT)*2.2);
+    ctx.globalAlpha = Math.max(0, fade);
+    panel(W/2-206, 132, 412, 52, "#1e2630", "#10161d", "#3d4a56", 2);
+    px(W/2-203, 135, 3, 46, "#ffd75e");
+    txt(b.line, W/2+4, 156, 11, "#ffe9a8", "center");
+    txt(b.sub,  W/2+4, 174, 8, "#c9d4dc", "center");
+    ctx.globalAlpha = 1;
+  }
+  drawTray();          // otherwise the strip under the scene is dead black
+  txt("press anything to skip", W/2, 322, 7, "#9a8f80", "center", false);
+  // beat pips
+  for(let i=0;i<OPENING.length;i++)
+    px(W/2 - OPENING.length*5 + i*10, 338, 7, 3, i<=beat ? "#ffd75e" : "#5d4630");
+}
+
 const HOME_BTN = [
   {id:"CAMPAIGN", label:"CAMPAIGN"},
   {id:"BESTIARY", label:"BESTIARY"},
@@ -3116,12 +3215,30 @@ function drawIntro(){
   const slide = t < 0.4 ? (1 - t/0.4) : t > 1.9 ? (t-1.9)/0.4 : 0;
   const ox = slide*slide*W * (t > 1.9 ? 1 : -1);
   ctx.globalAlpha = t > 2.1 ? Math.max(0, 1-(t-2.1)/0.2) : 1;
-  px(0,116,W,74,"rgba(14,10,20,0.55)");
+  // a real backing plate: the world rule and tags were unreadable against
+  // a bright snowfield
+  px(0,112,W,148,"rgba(12,9,18,0.68)");
+  px(0,112,W,2,"rgba(255,215,94,0.35)");
+  px(0,258,W,2,"rgba(255,215,94,0.35)");
   ribbon(W/2-120+ox, 126, 240, 24, "#3d4a56", "#232d36", "#5d6b78");
-  txt("BATTLE "+roman(G.battle), W/2+ox, 144, 16, "#ffd75e", "center");
-  txt(atmo().title, W/2+ox, 170, 12, "#eef4f7", "center");
-  txt(world().name + "   \u2022   " + diff().name, W/2+ox, 186, 8, "#b9c6cf", "center");
-  txt(battle().brief, W/2+ox, 202, 7, "#9aa8b2", "center", false);
+  const bt = battle(), ob = bt.objective || {type:"raze"};
+  txt("BATTLE "+roman(G.battle), W/2+ox, 138, 15, "#ffd75e", "center");
+  txt(bt.name, W/2+ox, 160, 13, "#eef4f7", "center");
+  txt(world().name + "   \u2022   " + diff().name, W/2+ox, 175, 8, "#b9c6cf", "center");
+  txt(bt.brief, W/2+ox, 191, 7, "#b9c6cf", "center", false);
+  // what this level actually asks of you
+  const goal = ob.type==="hold"    ? "HOLD "+ob.count+" FLAGS FOR "+ob.seconds+"s"
+             : ob.type==="survive" ? "SURVIVE "+ob.seconds+" SECONDS"
+             :                       "RAZE THEIR KEEP";
+  ribbon(W/2-92+ox, 200, 184, 17, "#3d4a56", "#232d36", "#5d6b78");
+  txt(goal, W/2+ox, 212, 9, "#a8ffd8", "center");
+  // and what this world does to you
+  txt(world().rule, W/2+ox, 232, 7, "#e8c99a", "center", false);
+  const tags = [];
+  if(bt.blocked && bt.blocked.length) tags.push("LANES CLOSED");
+  if(bt.boss) tags.push("CHAMPION");
+  if(bt.comp) tags.push(bt.comp.toUpperCase()+" HORDE");
+  if(tags.length) txt(tags.join("   \u2022   "), W/2+ox, 248, 7, "#ffb49a", "center", false);
   ctx.globalAlpha = 1;
 }
 
@@ -3181,7 +3298,8 @@ function drawRotateHint(){
 
 function render(){
   if(IS_PORTRAIT && !G.ignorePortrait){ drawRotateHint(); return; }
-  if(G.scene==="bestiary")    drawBestiary();
+  if(G.scene==="opening")     drawOpening();
+  else if(G.scene==="bestiary") drawBestiary();
   else if(G.scene==="map")    drawMap();
   else if(G.scene==="shop")   drawShop();
   else if(G.scene==="title")  drawTitle();
@@ -3266,6 +3384,7 @@ cv.addEventListener("pointerdown", e=>{
   if(IS_PORTRAIT && !G.ignorePortrait){ G.ignorePortrait = true; return; }
   const p = toInternal(e);
   if(menuClick(p)) return;                 // overlays swallow input first
+  if(G.scene==="opening"){ openingDone(); return; }
   if(G.scene==="shop"){ shopClick(p); return; }
   if(G.scene==="map"){
     if(inBox(p,MAP_SHOP)){ G.scene="shop"; tone(600,0.08,"square",0.05,1.3); return; }
@@ -3310,6 +3429,7 @@ cv.addEventListener("pointerdown", e=>{
 addEventListener("keydown", e=>{
   unlockAudio();
   const k = e.key.toLowerCase();
+  if(G.scene==="opening"){ openingDone(); e.preventDefault(); return; }
   if(G.scene==="title" && (k==="enter"||k===" ")){ G.scene="map"; G.sceneT=0; e.preventDefault(); return; }
   if((G.scene==="bestiary"||G.scene==="shop") && k==="escape"){
     G.scene = G.scene==="shop" ? "map" : "title"; e.preventDefault(); return; }
@@ -3384,6 +3504,7 @@ function step(now){
     // hit-stop lives in the loop, never in update(), so the headless
     // balance harness stays a pure function of dt.
     if(G.hitstop > 0){ G.hitstop -= dt; }
+    else if(G.scene==="opening"){ openingTick(dt); }
     else if(G.scene==="title"){ /* home is a place, not a live match */ }
     else if(G.scene==="play"){ tutStep(dt); heroTick(dt); for(let i=0;i<G.speed;i++) update(dt); }
     else if(G.scene==="result"){ stepFx(dt); }
@@ -3394,6 +3515,7 @@ function frame(now){ step(now); requestAnimationFrame(frame); }
 
 // boot
 bakeAll(); bakeCoin(); bakeGear(); buildScenery(); fit();
+if(!OPT.introSeen){ G.scene = "opening"; G.sceneT = 0; G.beat = 0; }
 requestAnimationFrame(frame);
 setInterval(()=>{ const now=performance.now(); if(now-last > 220) step(now); }, 100);
 
