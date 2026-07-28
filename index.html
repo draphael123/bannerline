@@ -58,16 +58,34 @@ const P = {
 // AUDIO
 //////////////////////////////////////////////////////////////////////////////
 let AC = null, MASTER = null;
-const SND = { muted:false };
+// Player options. Persisted to localStorage so they survive a reload.
+const OPT = { music:0.7, sfx:0.8, shake:true, dmgNums:true, fastDefault:false };
+try{
+  const raw = localStorage.getItem("bannerline.opt");
+  if(raw) Object.assign(OPT, JSON.parse(raw));
+}catch(e){}
+function saveOpt(){
+  try{ localStorage.setItem("bannerline.opt", JSON.stringify(OPT)); }catch(e){}
+}
+const SND = { get muted(){ return OPT.sfx <= 0 && OPT.music <= 0; } };
+let SFXBUS = null, MUSBUS = null;
 function unlockAudio(){
   if(AC) return;
   try{
     AC = new (window.AudioContext||window.webkitAudioContext)();
     MASTER = AC.createGain(); MASTER.gain.value = 0.9; MASTER.connect(AC.destination);
+    SFXBUS = AC.createGain(); SFXBUS.gain.value = OPT.sfx;   SFXBUS.connect(MASTER);
+    MUSBUS = AC.createGain(); MUSBUS.gain.value = OPT.music; MUSBUS.connect(MASTER);
   }catch(e){ AC = null; }
 }
-function tone(freq, dur, type, vol, slide, delay){
-  if(!AC || SND.muted) return;
+function applyVolumes(){
+  if(!AC) return;
+  SFXBUS.gain.value = OPT.sfx;
+  MUSBUS.gain.value = OPT.music;
+}
+function tone(freq, dur, type, vol, slide, delay, bus){
+  if(!AC) return;
+  if((bus === MUSBUS ? OPT.music : OPT.sfx) <= 0) return;
   const t = AC.currentTime + (delay||0);
   const o = AC.createOscillator(), g = AC.createGain();
   o.type = type||"square"; o.frequency.setValueAtTime(freq, t);
@@ -75,23 +93,23 @@ function tone(freq, dur, type, vol, slide, delay){
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(vol||0.05, t+0.006);
   g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
-  o.connect(g); g.connect(MASTER); o.start(t); o.stop(t+dur+0.03);
+  o.connect(g); g.connect(bus||SFXBUS); o.start(t); o.stop(t+dur+0.03);
 }
 function thud(dur, vol, cut){
-  if(!AC || SND.muted) return;
+  if(!AC || OPT.sfx <= 0) return;
   const n = Math.max(1,Math.floor(AC.sampleRate*dur));
   const b = AC.createBuffer(1,n,AC.sampleRate), d = b.getChannelData(0);
   for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/n, 2);
   const s = AC.createBufferSource(); s.buffer = b;
   const f = AC.createBiquadFilter(); f.type="lowpass"; f.frequency.value = cut||800;
   const g = AC.createGain(); g.gain.value = vol||0.05;
-  s.connect(f); f.connect(g); g.connect(MASTER); s.start();
+  s.connect(f); f.connect(g); g.connect(SFXBUS); s.start();
 }
 // a slow, low march bed — deliberately sparse so it never fights the SFX
 const MUS = { next:0, step:0 };
 const BASS = [55,55,73.4,65.4], LEAD = [220,246.9,293.7,246.9,220,196,220,0];
 function tickMusic(){
-  if(!AC || SND.muted || G.scene==="result") return;
+  if(!AC || OPT.music <= 0 || G.scene==="result" || G.overlay) return;
   const now = AC.currentTime;
   if(MUS.next < now) MUS.next = now + 0.05;
   while(MUS.next < now + 0.4){
@@ -99,14 +117,14 @@ function tickMusic(){
     const at = MUS.next - AC.currentTime;
     if(beat===0 || beat===4) thudAt(0.10, 0.055, 220, at);
     if(beat===2 || beat===6) thudAt(0.05, 0.020, 2600, at);
-    tone(BASS[bar], 0.32, "triangle", 0.045, 1, at);
+    tone(BASS[bar], 0.32, "triangle", 0.045, 1, at, MUSBUS);
     const l = LEAD[s % 8];
-    if(l && G.scene==="play") tone(l*2, 0.16, "square", 0.012, 1, at);
+    if(l && G.scene==="play") tone(l*2, 0.16, "square", 0.012, 1, at, MUSBUS);
     MUS.next += 0.26; MUS.step++;
   }
 }
 function thudAt(dur, vol, cut, delay){
-  if(!AC || SND.muted) return;
+  if(!AC || OPT.music <= 0) return;
   const t = AC.currentTime + delay;
   const n = Math.max(1,Math.floor(AC.sampleRate*dur));
   const b = AC.createBuffer(1,n,AC.sampleRate), d = b.getChannelData(0);
@@ -114,7 +132,7 @@ function thudAt(dur, vol, cut, delay){
   const s = AC.createBufferSource(); s.buffer=b;
   const f = AC.createBiquadFilter(); f.type="lowpass"; f.frequency.value=cut;
   const g = AC.createGain(); g.gain.value=vol;
-  s.connect(f); f.connect(g); g.connect(MASTER); s.start(t);
+  s.connect(f); f.connect(g); g.connect(MUSBUS); s.start(t);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -245,18 +263,136 @@ function artArcher(c, K, frame){
   if(atk){ R(c, 12, 18, 11, 2, P.wood); R(c, 22, 17, 3, 3, P.steel); }
 }
 
-const UNIT_ART = { spear:artSpear, knight:artKnight, archer:artArcher };
-const UNIT_BOX = { spear:{w:30,h:40}, knight:{w:27,h:47}, archer:{w:26,h:40} };
+// ---- the goblin horde -----------------------------------------------------
+// The enemy is a different SPECIES, not a palette swap. Two silhouettes on the
+// field beats one silhouette in two colours for readability at a glance.
+const GOB = {
+  skin:"#7ab84f", skinD:"#4d8130", skinL:"#a3da72",
+  rag:"#b0432f", ragD:"#75291b", ragL:"#d46a4e",
+  bone:"#f2ecdc", boneD:"#bdb39a",
+  fire:"#ffb03a", fireL:"#ffe08a", fireD:"#e05a1c",
+};
+function artGobSpear(c, K, frame){
+  const atk = frame===2, sw = frame===1 ? 1 : 0;
+  // squat, hunched, bandy legs
+  R(c, 7, 28+sw, 4, 8-sw, GOB.skinD); R(c, 12, 28+(1-sw), 4, 8-(1-sw), GOB.skinD);
+  R(c, 6, 35, 6, 2, GOB.ragD); R(c, 12, 35, 6, 2, GOB.ragD);
+  R(c, 6, 18, 11, 11, GOB.skin);            // torso
+  R(c, 6, 18, 11, 2, GOB.skinL);
+  R(c, 6, 25, 11, 4, GOB.rag);              // loincloth
+  R(c, 6, 25, 11, 1, GOB.ragL);
+  R(c, 4, 20, 3, 7, GOB.skin);              // arms
+  R(c, 16, atk?18:19, 3, 6, GOB.skin);
+  // big head + ears
+  R(c, 6, 9, 11, 9, GOB.skin);
+  R(c, 6, 16, 11, 2, GOB.skinD);
+  R(c, 1, 10, 6, 4, GOB.skin);              // left ear
+  R(c, 2, 11, 3, 2, GOB.skinL);
+  R(c, 16, 10, 6, 4, GOB.skin);             // right ear
+  R(c, 18, 11, 3, 2, GOB.skinL);
+  R(c, 12, 12, 3, 3, "#f5e14a");            // eye
+  R(c, 13, 13, 1, 1, K.d);
+  R(c, 8, 12, 3, 2, "#f5e14a");
+  R(c, 9, 16, 2, 2, GOB.bone);              // tusk
+  // crude spear: lashed flint
+  if(atk){
+    R(c, 12, 20, 14, 2, P.wood);
+    R(c, 25, 18, 3, 5, GOB.bone);
+    R(c, 22, 19, 2, 3, GOB.ragD);
+  } else {
+    R(c, 17, 3, 2, 30, P.wood);
+    R(c, 16, 0, 4, 6, GOB.bone);
+    R(c, 16, 5, 4, 2, GOB.ragD);
+  }
+}
+function artGobBrute(c, K, frame){
+  const atk = frame===2, sw = frame===1 ? 1 : 0;
+  c.save(); c.translate(0, 4);
+  // heavy legs
+  R(c, 8, 30+sw, 7, 10-sw, GOB.skinD); R(c, 17, 30+(1-sw), 7, 10-(1-sw), GOB.skinD);
+  R(c, 7, 38, 9, 3, GOB.ragD); R(c, 16, 38, 9, 3, GOB.ragD);
+  // huge hunched torso
+  R(c, 5, 12, 22, 19, GOB.skin);
+  R(c, 5, 12, 22, 3, GOB.skinL);
+  R(c, 5, 26, 22, 5, GOB.rag);
+  R(c, 5, 26, 22, 1, GOB.ragL);
+  R(c, 9, 16, 6, 8, GOB.skinD);             // belly shading
+  // slab shoulders
+  R(c, 2, 11, 7, 9, GOB.skinD);
+  R(c, 23, 11, 7, 9, GOB.skinD);
+  R(c, 3, 12, 4, 3, GOB.skinL);
+  // small mean head sunk between shoulders
+  R(c, 11, 3, 11, 10, GOB.skin);
+  R(c, 11, 11, 11, 2, GOB.skinD);
+  R(c, 12, 0, 9, 4, GOB.ragD);              // headband
+  R(c, 17, 6, 3, 3, "#ff5a3a");
+  R(c, 13, 6, 3, 3, "#ff5a3a");
+  R(c, 13, 10, 2, 3, GOB.bone);             // tusks
+  R(c, 18, 10, 2, 3, GOB.bone);
+  // plank shield
+  const shx = 0;
+  R(c, shx, 14, 6, 18, P.wood);
+  R(c, shx, 14, 6, 2, "#b8834f");
+  R(c, shx+1, 20, 4, 2, P.woodD);
+  R(c, shx, 26, 6, 2, P.woodD);
+  // bone club
+  if(atk){
+    R(c, 24, 8, 4, 14, P.wood);
+    R(c, 22, 2, 9, 8, GOB.bone);
+    R(c, 24, 4, 5, 4, GOB.boneD);
+  } else {
+    R(c, 27, 10, 4, 16, P.wood);
+    R(c, 25, 2, 9, 9, GOB.bone);
+    R(c, 27, 4, 5, 5, GOB.boneD);
+  }
+  c.restore();
+}
+function artGobShaman(c, K, frame){
+  const atk = frame===2, sw = frame===1 ? 1 : 0;
+  R(c, 8, 28+sw, 4, 8-sw, GOB.skinD); R(c, 13, 28+(1-sw), 4, 8-(1-sw), GOB.skinD);
+  R(c, 7, 35, 6, 2, GOB.ragD); R(c, 13, 35, 6, 2, GOB.ragD);
+  // robe
+  R(c, 5, 15, 14, 15, GOB.rag);
+  R(c, 5, 15, 14, 3, GOB.ragL);
+  R(c, 5, 26, 14, 3, GOB.ragD);
+  R(c, 3, 17, 3, 12, GOB.ragD);
+  // hood + snout
+  R(c, 5, 4, 15, 12, GOB.ragD);
+  R(c, 8, 8, 8, 6, GOB.skin);
+  R(c, 13, 10, 3, 2, "#f5e14a");
+  R(c, 9, 13, 2, 2, GOB.bone);
+  R(c, 5, 14, 15, 2, GOB.rag);
+  // bone necklace
+  R(c, 8, 16, 2, 3, GOB.bone); R(c, 12, 17, 2, 3, GOB.bone);
+  // staff topped with a burning skull
+  const stx = atk ? 22 : 20;
+  R(c, stx, 6, 3, 26, P.wood);
+  R(c, stx-2, 0, 7, 7, GOB.bone);
+  R(c, stx-1, 2, 2, 2, K.d); R(c, stx+2, 2, 2, 2, K.d);
+  R(c, stx-1, -3, 5, 3, GOB.fire);
+  R(c, stx, -5, 3, 3, GOB.fireL);
+  if(atk){ R(c, stx-6, 14, 5, 5, GOB.fire); R(c, stx-5, 15, 3, 3, GOB.fireL); }
+}
+
+const UNIT_ART = {
+  "1":  { spear:artSpear,     knight:artKnight,    archer:artArcher    },
+  "-1": { spear:artGobSpear,  knight:artGobBrute,  archer:artGobShaman },
+};
+const UNIT_BOX = {
+  "1":  { spear:{w:30,h:40}, knight:{w:27,h:47}, archer:{w:26,h:40} },
+  "-1": { spear:{w:30,h:38}, knight:{w:36,h:46}, archer:{w:30,h:42} },
+};
 const SPR = {};                               // SPR[type][side][frame] / .flash
 function bakeUnits(){
-  for(const type in UNIT_ART){
+  for(const type of ORDER){
     SPR[type] = {};
     for(const side of [1,-1]){
-      const K = colsFor(side), box = UNIT_BOX[type], flip = side < 0;
+      const K = colsFor(side), art = UNIT_ART[side][type], box = UNIT_BOX[side][type];
+      const flip = side < 0;                  // all art drawn facing right
       const frames = [], flashes = [];
       for(let f=0; f<3; f++){
-        frames.push (bake(box.w, box.h, c=>UNIT_ART[type](c,K,f), flip));
-        flashes.push(bake(box.w, box.h, c=>UNIT_ART[type](c,K,f), flip, "#ffffff"));
+        frames.push (bake(box.w, box.h, c=>art(c,K,f), flip));
+        flashes.push(bake(box.w, box.h, c=>art(c,K,f), flip, "#ffffff"));
       }
       SPR[type][side] = { frames, flashes, w:box.w+2, h:box.h+2 };
     }
@@ -264,34 +400,119 @@ function bakeUnits(){
 }
 
 // ---- keeps ----------------------------------------------------------------
-function artKeep(c, K, dmg){
-  // 56 x 78, base at bottom
-  R(c, 4, 14, 48, 64, K.d);
-  R(c, 6, 16, 44, 60, K.m);
-  for(let ry=0; ry<56; ry+=10){                 // stone courses
-    for(let rx=0; rx<40; rx+=14){
-      const ox = ((ry/10)%2)*7;
-      R(c, 8+rx+ox, 18+ry, 12, 8, K.l);
-      R(c, 8+rx+ox, 18+ry, 12, 2, "#ffffff28");
-      R(c, 8+rx+ox, 24+ry, 12, 2, K.d);
+const KEEP_W = 66, KEEP_H = 104;
+// Stone, not faction-blue. The keep should read as MASONRY at a glance, with
+// the banner and door carrying the colour — a blue building reads as a box.
+const ST = { m:"#93a0b5", d:"#5f6a7e", l:"#bcc7d6", hi:"#e2e9f2", dk:"#414a5c" };
+function artKeepHuman(c, K, dmg){
+  const B = KEEP_H;
+  // banner mast + pennant
+  R(c, 12, 0, 3, 26, P.wood);
+  R(c, 11, -4, 5, 5, P.gold);
+  R(c, 12, -3, 3, 3, P.goldL);
+  R(c, 15, 3, 16, 12, K.m);
+  R(c, 15, 3, 16, 3, K.l);
+  R(c, 15, 12, 16, 3, K.d);
+  R(c, 21, 6, 5, 6, K.l);
+  R(c, 31, 5, 4, 9, K.m);
+  // crenellated crown — merlons stand proud ABOVE the parapet band
+  for(let i=0;i<6;i++){
+    const mx = 6 + i*9;
+    R(c, mx, 20, 7, 12, ST.d);
+    R(c, mx+1, 21, 5, 10, ST.m);
+    R(c, mx+1, 21, 5, 2, ST.l);
+  }
+  R(c, 4, 30, 58, 8, ST.d);
+  R(c, 6, 31, 54, 5, ST.m);
+  R(c, 6, 31, 54, 2, ST.l);
+  R(c, 2, 37, 62, 4, ST.dk);          // corbel lip
+  R(c, 3, 37, 60, 1, ST.l);
+  // body
+  R(c, 6, 41, 54, B-41, ST.dk);
+  R(c, 8, 42, 50, B-43, ST.m);
+  for(let ry=0; ry<B-52; ry+=11){     // stone courses
+    for(let rx=0; rx<44; rx+=16){
+      const ox = ((ry/11)%2)*8;
+      if(10+rx+ox > 52) continue;
+      R(c, 10+rx+ox, 45+ry, 14, 9, ST.l);
+      R(c, 10+rx+ox, 45+ry, 14, 2, ST.hi);
+      R(c, 10+rx+ox, 52+ry, 14, 2, ST.d);
     }
   }
-  R(c, 2, 6, 52, 10, K.d);                      // battlement band
-  for(let i=0;i<5;i++) R(c, 2+i*11, 0, 7, 8, K.d);
-  for(let i=0;i<5;i++) R(c, 3+i*11, 1, 5, 4, K.m);
-  R(c, 20, 50, 16, 28, P.woodD);                // door
-  R(c, 22, 53, 12, 25, P.wood);
-  R(c, 22, 53, 12, 2, "#ffffff30");
-  R(c, 30, 64, 3, 4, P.gold);
-  if(dmg > 0){ R(c, 12, 22, 3, 26, P.ink); R(c, 15, 34, 3, 12, P.ink); R(c, 33, 20, 2, 14, P.ink); }
-  if(dmg > 1){ R(c, 38, 26, 4, 34, P.ink); R(c, 24, 34, 16, 3, P.ink); R(c, 8, 44, 10, 3, P.ink); }
+  R(c, 6, 41, 3, B-41, ST.d);         // side shading
+  R(c, 55, 41, 5, B-41, ST.d);
+  // arrow slits
+  for(const [ax,ay] of [[19,52],[43,52],[31,74]]){
+    R(c, ax-1, ay-1, 6, 15, ST.d);
+    R(c, ax, ay, 4, 13, "#161020");
+    R(c, ax+1, ay+1, 2, 9, "#0b0710");
+  }
+  // arched door with faction surround
+  R(c, 22, B-32, 22, 32, K.d);
+  R(c, 24, B-30, 18, 30, P.woodD);
+  R(c, 26, B-27, 14, 27, P.wood);
+  R(c, 26, B-27, 14, 2, "#ffffff30");
+  R(c, 31, B-27, 3, 27, P.woodD);
+  R(c, 37, B-16, 3, 4, P.gold);
+  if(dmg > 0){
+    R(c, 14, 48, 3, 32, P.ink); R(c, 17, 62, 3, 16, P.ink); R(c, 49, 46, 2, 20, P.ink);
+    R(c, 6, 20, 7, 12, ST.dk);                                  // knocked merlon
+    R(c, 2, B-7, 12, 7, ST.d); R(c, 5, B-11, 6, 5, ST.m);       // rubble
+  }
+  if(dmg > 1){
+    R(c, 44, 50, 10, 42, "#1b1424");                             // breach
+    R(c, 46, 54, 6, 34, "#0b0710");
+    R(c, 33, 60, 16, 5, "#1b1424");
+    R(c, 51, 20, 7, 12, ST.dk);
+    R(c, 50, B-9, 16, 9, ST.d); R(c, 55, B-14, 8, 6, ST.m);
+    R(c, 24, 30, 12, 8, ST.dk);
+  }
+}
+function artKeepGoblin(c, K, dmg){
+  const B = KEEP_H;
+  // skull totem
+  R(c, 30, 6, 4, 22, P.wood);
+  R(c, 25, 0, 14, 11, GOB.bone);
+  R(c, 28, 3, 3, 3, P.ink); R(c, 33, 3, 3, 3, P.ink);
+  R(c, 28, 8, 8, 3, GOB.boneD);
+  R(c, 22, 12, 5, 3, GOB.rag); R(c, 37, 12, 5, 3, GOB.rag);
+  // sharpened palisade logs
+  for(let i=0;i<8;i++){
+    const lx = 4 + i*8, lh = 24 + ((i*5)%9);
+    R(c, lx, 28, 7, B-28, P.wood);
+    R(c, lx, 28, 2, B-28, "#a97046");
+    R(c, lx+5, 28, 2, B-28, P.woodD);
+    R(c, lx+1, 22 + (lh%6), 5, 8, P.wood);        // pointed top
+    R(c, lx+2, 18 + (lh%6), 3, 6, "#b8834f");
+  }
+  // lashings
+  R(c, 2, 44, 62, 4, GOB.ragD);
+  R(c, 2, 45, 62, 1, GOB.rag);
+  R(c, 2, 70, 62, 4, GOB.ragD);
+  R(c, 2, 71, 62, 1, GOB.rag);
+  // cave-mouth gate
+  R(c, 22, B-32, 22, 32, "#241a12");
+  R(c, 25, B-28, 16, 28, "#120d18");
+  R(c, 22, B-32, 22, 4, P.woodD);
+  for(let i=0;i<4;i++) R(c, 24+i*5, B-28, 3, 5, GOB.bone);   // teeth
+  // rag banners
+  R(c, 6, 32, 8, 12, GOB.rag);  R(c, 6, 42, 8, 3, GOB.ragD);
+  R(c, 52, 34, 8, 12, GOB.rag); R(c, 52, 44, 8, 3, GOB.ragD);
+  if(dmg > 0){
+    R(c, 12, 30, 7, 40, P.ink);                    // splintered log
+    R(c, 4, B-6, 12, 6, P.woodD); R(c, 7, B-10, 6, 5, P.wood);
+  }
+  if(dmg > 1){
+    R(c, 44, 34, 9, 50, P.ink);
+    R(c, 36, 46, 16, 5, P.ink);
+    R(c, 50, B-9, 14, 9, P.woodD); R(c, 54, B-13, 7, 5, P.wood);
+    R(c, 25, 0, 14, 11, "#5a5348");                // shattered skull
+  }
 }
 const KEEP = {};
 function bakeKeeps(){
-  for(const side of [1,-1]){
-    const K = colsFor(side);
-    KEEP[side] = [0,1,2].map(d => bake(56, 78, c=>artKeep(c,K,d), side<0));
-  }
+  KEEP[1]  = [0,1,2].map(d => bake(KEEP_W, KEEP_H, c=>artKeepHuman(c, colsFor(1), d)));
+  KEEP[-1] = [0,1,2].map(d => bake(KEEP_W, KEEP_H, c=>artKeepGoblin(c, colsFor(-1), d), true));
 }
 
 // ---- props ----------------------------------------------------------------
@@ -302,13 +523,15 @@ const PROP_ART = {
   skull:     c=>{ R(c,1,1,9,7,P.bone); R(c,2,8,7,2,P.bone); R(c,3,3,2,3,P.ink); R(c,6,3,2,3,P.ink); R(c,4,8,3,1,P.ink); R(c,1,6,9,1,P.boneD); },
   mushroom:  c=>{ R(c,3,5,3,5,"#f0e2c0"); R(c,0,1,9,5,"#e0543f"); R(c,1,0,7,2,"#f07a5e"); R(c,2,2,2,2,P.cream); R(c,5,3,2,2,P.cream); },
   flower:    c=>{ R(c,3,3,2,6,P.grassD); R(c,1,0,3,3,"#f2d64a"); R(c,5,1,3,3,"#ef7fb0"); },
-  tuft:      c=>{ R(c,0,4,2,4,P.grassD); R(c,3,2,2,6,P.grass); R(c,6,4,2,4,P.grassD); R(c,3,2,2,2,P.grassL); },
-  bush:      c=>{ R(c,1,4,16,8,P.grassD); R(c,3,1,12,6,P.grass); R(c,5,0,7,3,P.grassL); R(c,1,10,16,2,"#37853a"); },
-  bushSm:    c=>{ R(c,1,3,10,6,P.grassD); R(c,2,1,8,4,P.grass); R(c,4,0,4,2,P.grassL); },
-  treePine:  c=>{ R(c,8,26,4,8,P.woodD); R(c,4,16,12,12,"#2f8f52"); R(c,6,8,8,10,"#38a35d"); R(c,8,2,4,8,"#45b768"); R(c,4,24,12,3,"#276f42"); },
-  treeOak:   c=>{ R(c,9,22,4,10,P.woodD); R(c,10,24,2,8,"#7a4d2b"); R(c,2,6,18,16,"#3f9c48"); R(c,5,2,12,8,"#4fb356"); R(c,7,0,7,4,"#63c765"); R(c,2,18,18,4,"#2f7f3c"); },
-  treeGold:  c=>{ R(c,9,22,4,10,P.woodD); R(c,3,6,16,15,"#d8a83a"); R(c,6,2,11,7,"#eec95a");
-                  R(c,8,0,6,4,"#f7dc7d"); R(c,3,18,16,4,"#b98a26"); },
+  // `L` is a lean offset (-1/0/+1) applied to the CANOPY only — the trunk
+  // stays planted, which is what reads as sway instead of sliding.
+  tuft:      (c,L=0)=>{ R(c,0+L,4,2,4,P.grassD); R(c,3+L,2,2,6,P.grass); R(c,6+L,4,2,4,P.grassD); R(c,3+L,2,2,2,P.grassL); },
+  bush:      (c,L=0)=>{ R(c,1,4,16,8,P.grassD); R(c,3+L,1,12,6,P.grass); R(c,5+L,0,7,3,P.grassL); R(c,1,10,16,2,"#37853a"); },
+  bushSm:    (c,L=0)=>{ R(c,1,3,10,6,P.grassD); R(c,2+L,1,8,4,P.grass); R(c,4+L,0,4,2,P.grassL); },
+  treePine:  (c,L=0)=>{ R(c,8,26,4,8,P.woodD); R(c,4,16,12,12,"#2f8f52"); R(c,6+L,8,8,10,"#38a35d"); R(c,8+L*2,2,4,8,"#45b768"); R(c,4,24,12,3,"#276f42"); },
+  treeOak:   (c,L=0)=>{ R(c,9,22,4,10,P.woodD); R(c,10,24,2,8,"#7a4d2b"); R(c,2+L,6,18,16,"#3f9c48"); R(c,5+L,2,12,8,"#4fb356"); R(c,7+L*2,0,7,4,"#63c765"); R(c,2+L,18,18,4,"#2f7f3c"); },
+  treeGold:  (c,L=0)=>{ R(c,9,22,4,10,P.woodD); R(c,3+L,6,16,15,"#d8a83a"); R(c,6+L,2,11,7,"#eec95a");
+                  R(c,8+L*2,0,6,4,"#f7dc7d"); R(c,3+L,18,16,4,"#b98a26"); },
   stump:     c=>{ R(c,1,4,12,8,"#7a4d2b"); R(c,1,2,12,4,"#96633a"); R(c,3,3,8,2,"#b07c4c"); },
   lily:      c=>{ R(c,1,2,10,4,"#3f9c58"); R(c,2,1,8,2,"#4fb068"); R(c,5,0,3,2,"#e8e0f0"); },
   waterRock: c=>{ R(c,1,3,12,5,"#7f8a95"); R(c,3,1,8,3,"#9aa5b0"); R(c,0,7,14,2,"#5f6a75"); },
@@ -321,30 +544,52 @@ const PROP_BOX = {
   stump:{w:14,h:12}, lily:{w:12,h:6}, waterRock:{w:14,h:9},
 };
 const PROP = {};
+const SWAYABLE = { tuft:1, bush:1, bushSm:1, treePine:1, treeOak:1, treeGold:1 };
 function bakeProps(){
   for(const k in PROP_ART){
     const b = PROP_BOX[k];
-    PROP[k] = bake(b.w, b.h, PROP_ART[k]);
+    if(SWAYABLE[k]) PROP[k] = [-1,0,1].map(L => bake(b.w+2, b.h, c=>PROP_ART[k](c,L)));
+    else            PROP[k] = bake(b.w, b.h, PROP_ART[k]);
   }
 }
 
 // ---- banner sprite --------------------------------------------------------
 const BANNER = {};
 function bakeBanners(){
-  for(const side of [1,-1]){
-    const K = colsFor(side);
-    BANNER[side] = bake(20, 54, c=>{
+  // player: a proper heraldic flag.  goblins: a tattered rag on a bone pole.
+  BANNER[1] = [0,1,2].map(f => {
+    const K = colsFor(1), w = f-1;
+    return bake(22, 54, c=>{
       R(c, 2, 4, 3, 50, P.wood);
       R(c, 2, 4, 1, 50, "#b8834f");
       R(c, 1, 0, 5, 5, P.gold);
       R(c, 2, 1, 3, 3, P.goldL);
-      R(c, 5, 6, 14, 16, K.m);
-      R(c, 5, 6, 14, 3, K.l);
-      R(c, 5, 19, 14, 3, K.d);
+      R(c, 5, 6+ (w>0?1:0), 14, 16, K.m);
+      R(c, 5, 6+ (w>0?1:0), 14, 3, K.l);
+      R(c, 5, 19+(w>0?1:0), 14, 3, K.d);
       R(c, 10, 10, 4, 8, K.l);
-      R(c, 5, 22, 4, 5, K.m); R(c, 13, 22, 4, 5, K.m);
+      R(c, 17, 8+w, 4, 12, K.m);            // fluttering tail
+      R(c, 17, 8+w, 4, 2, K.l);
+      R(c, 5, 22, 4, 5, K.m); R(c, 13, 22+w, 4, 5, K.m);
     });
-  }
+  });
+  BANNER[-1] = [0,1,2].map(f => {
+    const w = f-1;
+    return bake(22, 54, c=>{
+      R(c, 2, 6, 3, 48, GOB.boneD);
+      R(c, 2, 6, 1, 48, GOB.bone);
+      R(c, 0, 0, 7, 7, GOB.bone);           // skull finial
+      R(c, 1, 2, 2, 2, P.ink); R(c, 4, 2, 2, 2, P.ink);
+      R(c, 2, 5, 3, 2, GOB.boneD);
+      R(c, 5, 10+(w>0?1:0), 13, 15, GOB.rag);
+      R(c, 5, 10+(w>0?1:0), 13, 2, GOB.ragL);
+      R(c, 5, 22+(w>0?1:0), 13, 3, GOB.ragD);
+      R(c, 16, 12+w, 4, 10, GOB.rag);       // torn tail
+      R(c, 6, 25, 3, 6, GOB.rag);
+      R(c, 12, 25+w, 3, 7, GOB.rag);
+      R(c, 9, 16, 4, 5, GOB.ragD);
+    });
+  });
 }
 
 function bakeAll(){ bakeUnits(); bakeKeeps(); bakeProps(); bakeBanners(); }
@@ -376,7 +621,7 @@ const TYPES = {
 const ORDER = ["spear","knight","archer"];
 
 const G = {
-  scene:"title", sceneT:0,
+  scene:"title", sceneT:0, overlay:null,
   t:0, over:null, speed:1, paused:false,
   gold:60, goldMax:240,
   eGold:60, eBrainCd:0,
@@ -384,7 +629,7 @@ const G = {
   keepP:{hp:400,max:400,x:-4}, keepE:{hp:400,max:400,x:104},
   front:50, frontTarget:50,
   timeLeft:180,
-  shake:0, flash:0, hitstop:0,
+  shake:0, flash:0, hitstop:0, wind:0,
   banners:[], toast:null, toastT:0,
   stats:{sent:0, spent:0, kills:0, maxFront:50},
 };
@@ -804,11 +1049,11 @@ let SCENERY = { water:[], far:[], field:[], fore:[] };
 function buildScenery(){
   const rnd = mulberry(20260728);
   const S = { water:[], far:[], field:[], fore:[] };
-  for(let i=0;i<9;i++) S.water.push({k: rnd()<0.5?"waterRock":"lily", x:rnd()*W, y:82+rnd()*44});
+  for(let i=0;i<9;i++) S.water.push({k: rnd()<0.5?"waterRock":"lily", x:rnd()*W, y:82+rnd()*44, ph:rnd()*6.28});
   for(let i=0;i<26;i++){
     const r = rnd();
     S.far.push({ k: r<0.24?"treePine": r<0.46?"treeOak": r<0.62?"treeGold": r<0.82?"bush":"bushSm",
-                 x: rnd()*(W+20)-10, y: 150+rnd()*18 });
+                 x: rnd()*(W+20)-10, y: 150+rnd()*18, ph:rnd()*6.28 });
   }
   S.far.sort((a,b)=>a.y-b.y);
   for(let i=0;i<54;i++){
@@ -817,22 +1062,37 @@ function buildScenery(){
     if(Math.abs(y-GROUND_Y) < 22 && rnd() < 0.62) continue;
     S.field.push({ k: r<0.20?"rock": r<0.40?"rockSm": r<0.54?"bone": r<0.62?"skull"
                     : r<0.76?"tuft": r<0.88?"flower":"mushroom",
-                   x: rnd()*W, y });
+                   x: rnd()*W, y, ph:rnd()*6.28 });
   }
   S.field.sort((a,b)=>a.y-b.y);
   for(let i=0;i<10;i++){
     const r = rnd();
     S.fore.push({ k: r<0.34?"treePine": r<0.54?"treeOak": r<0.7?"bush":
                      r<0.85?"stump":"rock",
-                  x: rnd()*(W+30)-15, y: 290+rnd()*12 });
+                  x: rnd()*(W+30)-15, y: 290+rnd()*12, ph:rnd()*6.28 });
   }
   S.fore.sort((a,b)=>a.y-b.y);
   SCENERY = S;
 }
-function blitProp(k, x, y){
-  const img = PROP[k], b = PROP_BOX[k];
-  if(!img) return;
+function blitProp(k, x, y, phase){
+  const e = PROP[k], b = PROP_BOX[k];
+  if(!e) return;
+  let img = e;
+  if(Array.isArray(e)){
+    // each prop sways on its own phase so the treeline never pulses in unison
+    const s = Math.sin(G.wind*1.5 + (phase||0));
+    img = e[s < -0.34 ? 0 : s > 0.34 ? 2 : 1];
+  }
   ctx.drawImage(img, Math.round(x - b.w/2) - 1, Math.round(y - b.h) - 1);
+}
+// grounding shadow under a prop
+function propShadow(k, x, y){
+  const b = PROP_BOX[k];
+  if(b.h < 10) return;
+  const w = Math.round(b.w*0.8);
+  ctx.globalAlpha = 0.20;
+  px(Math.round(x-w/2), Math.round(y)-2, w, 3, "#000");
+  ctx.globalAlpha = 1;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -856,7 +1116,7 @@ function drawWater(){
     px(i+3, 104+Math.sin(i*0.07-G.t*0.5)*2, 5, 2, P.waterD);
     px(i, 122+Math.sin(i*0.04+G.t*0.9)*2, 7, 2, P.waterL);
   }
-  for(const s of SCENERY.water) blitProp(s.k, s.x, s.y);
+  for(const s of SCENERY.water) blitProp(s.k, s.x, s.y, s.ph);
   // foam at the far bank
   for(let i=0;i<W;i+=6) px(i, 130+Math.sin(i*0.09+G.t*1.6)*2, 5, 3, P.foam);
 }
@@ -864,7 +1124,7 @@ function drawFarBank(){
   px(0,132,W,38,P.grassFar);
   px(0,132,W,4,P.grassL);
   px(0,164,W,6,P.grassFarD);
-  for(const s of SCENERY.far) blitProp(s.k, s.x, s.y);
+  for(const s of SCENERY.far){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 }
 
 // The whole contested band is coloured by who owns it. This IS the game — if
@@ -888,12 +1148,30 @@ function drawTerritory(){
   ctx.globalAlpha = 0.20;
   for(let x=0;x<W;x+=7) px(x, ty+4+((x*11)%54), 4, 2, P.dirtD);
   ctx.globalAlpha = 1;
-  for(const s of SCENERY.field) blitProp(s.k, s.x, s.y);
+  // CHURNED EARTH — the ground where the armies actually grind each other
+  for(let d=-30; d<30; d+=3){
+    const a = (1 - Math.abs(d)/30);
+    if(a <= 0.05) continue;
+    ctx.globalAlpha = a*0.42;
+    const cx2 = fx + d;
+    px(cx2, GROUND_Y-26 + ((d*7)%46), 3, 3, "#8a6a3e");
+    px(cx2, GROUND_Y-18 + ((d*13)%38), 2, 2, "#6d5230");
+    ctx.globalAlpha = 1;
+  }
+  for(const s of SCENERY.field){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 
-  // the seam
-  const pulse = 0.5 + Math.sin(G.t*7)*0.2;
+  // banded vertical shading — grounds the whole strip instead of a flat wash
+  ctx.globalAlpha = 0.13; px(0, BAND_TOP,    W, 7,  "#1b2334");
+  ctx.globalAlpha = 0.07; px(0, BAND_TOP+7,  W, 7,  "#1b2334");
+  ctx.globalAlpha = 0.06; px(0, GROUND_Y-34, W, 22, "#ffd9a0");   // sun band
+  ctx.globalAlpha = 0.08; px(0, BAND_BOT-12, W, 12, "#1b2334");
+  ctx.globalAlpha = 0.05; px(0, BAND_BOT-6,  W, 6,  "#101828");
+  ctx.globalAlpha = 1;
+
+  // the seam — quieter than before; churn and dust now carry the drama
+  const pulse = 0.34 + Math.sin(G.t*7)*0.14;
   ctx.globalAlpha = pulse;      px(fx-1, BAND_TOP, 3, h, "#ffffff");
-  ctx.globalAlpha = pulse*0.45; px(fx-4, BAND_TOP, 2, h, "#ffffff");
+  ctx.globalAlpha = pulse*0.4;  px(fx-4, BAND_TOP, 2, h, "#ffffff");
                                 px(fx+3, BAND_TOP, 2, h, "#ffffff");
   ctx.globalAlpha = 1;
   const drift = G.frontTarget - G.front;
@@ -907,12 +1185,54 @@ function drawTerritory(){
     }
     ctx.globalAlpha = 1;
   }
+
+  // DUST HAZE over the clash — stateless, so it costs no simulation
+  for(let i=0;i<14;i++){
+    const life = ((G.wind*0.55 + i*0.34) % 1);
+    const px0 = fx + Math.sin(i*2.7)*24 + Math.sin(G.wind*0.7+i)*5;
+    const py0 = GROUND_Y - 6 - life*30;
+    ctx.globalAlpha = (1-life) * 0.24;
+    const s2 = 3 + Math.round(life*4);
+    px(px0, py0, s2, s2, "#efe2c2");
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---- ambient life: pure functions of the wind clock, zero state ----------
+function drawBirds(){
+  for(let i=0;i<5;i++){
+    const sp = 11 + (i%3)*5;
+    const bx = ((i*151 + G.wind*sp) % (W+80)) - 40;
+    const by = 14 + (i%4)*11 + Math.sin(G.wind*0.9 + i)*3;
+    const flap = Math.sin(G.wind*7 + i*1.4) > 0 ? 0 : 1;
+    ctx.globalAlpha = 0.75;
+    if(flap){ px(bx,by,3,1,OL); px(bx+3,by-1,2,1,OL); px(bx+5,by,3,1,OL); }
+    else    { px(bx,by-1,3,1,OL); px(bx+3,by,2,1,OL); px(bx+5,by-1,3,1,OL); }
+    ctx.globalAlpha = 1;
+  }
+}
+function drawLeaves(){
+  const COL = ["#e0b455","#d88f43","#c9702f","#6fb85c"];
+  for(let i=0;i<16;i++){
+    const t = (G.wind*0.16 + i*0.0625) % 1;
+    const lx = ((i*97 + G.wind*17) % (W+40)) - 20;
+    const ly = BAND_TOP - 10 + t*(BAND_BOT+26 - BAND_TOP);
+    const wob = Math.sin(G.wind*2.4 + i*1.7)*4;
+    ctx.globalAlpha = 0.55 * Math.min(1, (1-t)*3);
+    px(lx+wob, ly, 3, 2, COL[i%4]);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawBanners(){
   for(const b of G.banners){
-    const img = BANNER[b.owner];
+    const set = BANNER[b.owner];
+    const s = Math.sin(G.wind*2.2 + b.x*0.4);
+    const img = set[s < -0.34 ? 0 : s > 0.34 ? 2 : 1];
     const lift = Math.round(b.pop*7);
+    ctx.globalAlpha = 0.22;
+    px(Math.round(sx(b.x))-4, BAND_TOP+46, 12, 3, "#000");
+    ctx.globalAlpha = 1;
     ctx.drawImage(img, Math.round(sx(b.x))-3, BAND_TOP - 4 - lift);
     if(b.pop > 0){
       ctx.globalAlpha = b.pop*0.9;
@@ -927,13 +1247,19 @@ function drawKeep(keep, side){
   const frac = keep.hp/keep.max;
   const dmg = frac < 0.34 ? 2 : frac < 0.67 ? 1 : 0;
   const img = KEEP[side][dmg];
-  const x = Math.round(sx(keep.x) - 29), y = GROUND_Y - 78;
+  const cx = Math.round(sx(keep.x));
+  const x = cx - KEEP_W/2 - 1, y = GROUND_Y - KEEP_H - 1;
+  // grounding shadow
+  ctx.globalAlpha = 0.26;
+  px(cx-30, GROUND_Y-4, 60, 7, "#000");
+  px(cx-34, GROUND_Y-2, 68, 3, "#000");
+  ctx.globalAlpha = 1;
   ctx.drawImage(img, x, y);
   // hp plate
-  const cx = Math.round(sx(keep.x));
-  panel(cx-30, y-19, 60, 13, P.panel, P.panelD, P.panelL, 2);
-  capsule(cx-26, y-16, 52, 6, frac, frac>0.35?"#66d96e":"#e8574a", "#ffffff70");
-  txt(Math.ceil(keep.hp), cx, y-7, 9, P.cream, "center");
+  const py = y - 4;
+  panel(cx-30, py-14, 60, 13, P.panel, P.panelD, P.panelL, 2);
+  capsule(cx-26, py-11, 52, 6, frac, frac>0.35?"#66d96e":"#e8574a", "#ffffff70");
+  txt(Math.ceil(keep.hp), cx, py-2, 9, P.cream, "center");
 }
 
 function drawUnit(u){
@@ -946,8 +1272,11 @@ function drawUnit(u){
   // spawn pop: squash then settle
   const pop = u.pop;
   const sw = 1 + pop*0.5, sh = 1 - pop*0.35;
-  ctx.globalAlpha = .28;
-  px(x - S.w/2 + 2, y-2, S.w-4, 3, "#000");
+  const shw = S.w-6;
+  ctx.globalAlpha = .30;
+  px(x-shw/2+2, y-4, shw-4, 2, "#000");
+  px(x-shw/2,   y-2, shw,   2, "#000");
+  px(x-shw/2+3, y,   shw-6, 1, "#000");
   ctx.globalAlpha = 1;
   if(pop > 0.01){
     ctx.save();
@@ -979,7 +1308,7 @@ function drawFore(){
   px(0,BAND_BOT,W,300-BAND_BOT,P.grass);
   px(0,BAND_BOT,W,4,P.grassL);
   px(0,296,W,4,P.grassD);
-  for(const s of SCENERY.fore) blitProp(s.k, s.x, s.y);
+  for(const s of SCENERY.fore){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 }
 
 function drawFx(){
@@ -1008,7 +1337,7 @@ function drawFx(){
     px(sx(p.x), GROUND_Y+p.y, p.s, p.s, p.c);
     ctx.globalAlpha = 1;
   }
-  for(const n of G.nums){
+  if(OPT.dmgNums) for(const n of G.nums){
     ctx.globalAlpha = Math.min(1, n.life*2.4);
     txt(n.v, sx(n.x), GROUND_Y+n.y-14, 10, n.c, "center");
     ctx.globalAlpha = 1;
@@ -1022,7 +1351,111 @@ function cardRect(i){
   return { x:(W-total)/2 + i*(CARD_W+CARD_GAP), y:CARD_Y, w:CARD_W, h:CARD_H };
 }
 const SPEED_BTN = {x:W/2-26, y:6, w:52, h:20};
-const MUTE_BTN  = {x:W-34, y:6, w:26, h:20};
+const GEAR_BTN  = {x:W-34, y:6, w:26, h:20};
+const TITLE_SET = {x:W-104, y:8, w:92, h:24};
+
+//////////////////////////////////////////////////////////////////////////////
+// MENUS — layouts are pure functions so draw and hit-test can never disagree
+//////////////////////////////////////////////////////////////////////////////
+const PAUSE_ITEMS = ["RESUME","SETTINGS","RESTART","QUIT TO TITLE"];
+function pauseLayout(){
+  const bw=200, bh=28, gap=9, x=(W-bw)/2, y0=130;
+  return PAUSE_ITEMS.map((label,i)=>({label, x, y:y0+i*(bh+gap), w:bw, h:bh}));
+}
+const SETTINGS_ROWS = [
+  {key:"music",       label:"MUSIC",          type:"slider"},
+  {key:"sfx",         label:"SOUND",          type:"slider"},
+  {key:"shake",       label:"SCREEN SHAKE",   type:"toggle"},
+  {key:"dmgNums",     label:"DAMAGE NUMBERS", type:"toggle"},
+  {key:"fastDefault", label:"START AT 2x",    type:"toggle"},
+];
+function settingsLayout(){
+  const x=W/2-142, y0=108, rh=27;
+  const rows = SETTINGS_ROWS.map((r,i)=>{
+    const y = y0+i*rh;
+    const o = {...r, x, y, w:284, h:23};
+    if(r.type==="slider"){
+      o.minus = {x:x+150, y:y+3, w:18, h:17};
+      o.bar   = {x:x+172, y:y+7, w:74, h:9};
+      o.plus  = {x:x+250, y:y+3, w:18, h:17};
+    } else {
+      o.tog = {x:x+188, y:y+3, w:80, h:17};
+    }
+    return o;
+  });
+  return {rows, back:{label:"BACK", x:W/2-75, y:y0+SETTINGS_ROWS.length*rh+12, w:150, h:28}};
+}
+
+function mbtn(b, hot, tone_){
+  panel(b.x, b.y, b.w, b.h, hot?"#5d4630":P.panel, P.panelD, P.panelL, 2);
+  txt(b.label, b.x+b.w/2, b.y+b.h/2+4, 10, tone_||P.cream, "center");
+}
+
+function drawPauseMenu(){
+  px(0,0,W,H,"rgba(10,8,16,0.72)");
+  txt("PAUSED", W/2, 100, 26, "#ffd75e", "center");
+  const items = pauseLayout();
+  for(const b of items) mbtn(b, hoverMenu===b.label);
+  txt("ESC resumes", W/2, 292, 8, "#9a9284", "center");
+}
+
+function drawSettingsMenu(){
+  px(0,0,W,H,"rgba(10,8,16,0.78)");
+  txt("SETTINGS", W/2, 88, 22, "#ffd75e", "center");
+  const L = settingsLayout();
+  for(const r of L.rows){
+    panel(r.x, r.y, r.w, r.h, "#33261a", P.panelD, P.panelL, 2);
+    txt(r.label, r.x+10, r.y+16, 9, P.cream, "left", false);
+    if(r.type==="slider"){
+      mbtn({...r.minus, label:"-"}, hoverMenu===r.key+"-");
+      const v = OPT[r.key];
+      capsule(r.bar.x, r.bar.y, r.bar.w, r.bar.h, v, v>0?P.gold:"#6a5a44", P.goldL);
+      txt(Math.round(v*100)+"%", r.bar.x+r.bar.w/2, r.bar.y+8, 8,
+          v>0?"#2a1e10":"#a09080", "center", false);
+      mbtn({...r.plus, label:"+"}, hoverMenu===r.key+"+");
+    } else {
+      const on = !!OPT[r.key];
+      panel(r.tog.x, r.tog.y, r.tog.w, r.tog.h,
+            on?"#2f6b58":"#4a3a2a", P.panelD, on?"#4a9a80":P.panelL, 2);
+      txt(on?"ON":"OFF", r.tog.x+r.tog.w/2, r.tog.y+12, 9,
+          on?"#a8ffd8":"#b0a48c", "center", false);
+    }
+  }
+  mbtn(L.back, hoverMenu==="BACK");
+}
+
+function menuClick(p){
+  if(G.overlay==="pause"){
+    for(const b of pauseLayout()){
+      if(!inBox(p,b)) continue;
+      tone(600,0.07,"square",0.05,1.4);
+      if(b.label==="RESUME")            G.overlay = null;
+      else if(b.label==="SETTINGS")     G.overlay = "settings";
+      else if(b.label==="RESTART")    { G.overlay = null; startBattle(); }
+      else if(b.label==="QUIT TO TITLE"){ G.overlay=null; reset(); G.scene="title"; G.sceneT=0; }
+      return true;
+    }
+    return true;                     // swallow clicks on the scrim
+  }
+  if(G.overlay==="settings"){
+    const L = settingsLayout();
+    for(const r of L.rows){
+      if(r.type==="slider"){
+        if(inBox(p,r.minus)){ OPT[r.key]=Math.max(0, +(OPT[r.key]-0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(420,0.05,"square",0.04); return true; }
+        if(inBox(p,r.plus)) { OPT[r.key]=Math.min(1, +(OPT[r.key]+0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(700,0.05,"square",0.04); return true; }
+        if(inBox(p,r.bar))  { OPT[r.key]=Math.max(0,Math.min(1,(p.x-r.bar.x)/r.bar.w)); applyVolumes(); saveOpt(); return true; }
+      } else if(inBox(p,r.tog)){
+        OPT[r.key] = !OPT[r.key]; saveOpt();
+        tone(OPT[r.key]?720:360, 0.07, "square", 0.045, 1.2);
+        return true;
+      }
+    }
+    if(inBox(p,L.back)){ G.overlay = (G.scene==="play") ? "pause" : null;
+                         tone(500,0.07,"square",0.05,0.8); return true; }
+    return true;
+  }
+  return false;
+}
 
 function drawTray(){
   px(0,300,W,60,P.panelD);
@@ -1095,9 +1528,9 @@ function drawHUD(){
         G.speed>1?"#7a5a2a":P.panel, P.panelD, P.panelL, 2);
   txt(G.speed+"x", SPEED_BTN.x+SPEED_BTN.w/2, SPEED_BTN.y+14, 10, P.cream, "center");
 
-  panel(MUTE_BTN.x, MUTE_BTN.y, MUTE_BTN.w, MUTE_BTN.h, P.panel, P.panelD, P.panelL, 2);
-  txt(SND.muted?"×":"♪", MUTE_BTN.x+13, MUTE_BTN.y+14, 10,
-      SND.muted?"#a09080":P.cream, "center");
+  panel(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h,
+        hoverGear?"#5d4630":P.panel, P.panelD, P.panelL, 2);
+  ctx.drawImage(gearImg, GEAR_BTN.x+6, GEAR_BTN.y+4);
 
   if(G.toastT > 0 && G.toast){
     const a = Math.min(1, G.toastT/0.7);
@@ -1110,7 +1543,16 @@ function drawHUD(){
   }
 }
 
-// coin icon, baked
+// coin + gear icons, baked
+let gearImg;
+function bakeGear(){
+  gearImg = bake(14,14, c=>{
+    for(const [gx,gy] of [[5,0],[5,11],[0,5],[11,5],[1,1],[10,10],[10,1],[1,10]])
+      R(c,gx,gy,4,4,"#d9cdb4");
+    R(c,3,3,8,8,"#efe4cc");
+    R(c,5,5,4,4,P.panelD);
+  });
+}
 let coinImg;
 function bakeCoin(){
   coinImg = bake(11,11, c=>{
@@ -1125,8 +1567,8 @@ function bakeCoin(){
 //////////////////////////////////////////////////////////////////////////////
 function drawBattlefield(){
   ctx.save();
-  if(G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
-  drawSky(); drawWater(); drawFarBank();
+  if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
+  drawSky(); drawBirds(); drawWater(); drawFarBank();
   drawTerritory(); drawBanners();
   drawKeep(G.keepP, 1); drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
@@ -1134,6 +1576,7 @@ function drawBattlefield(){
   for(const u of sorted) drawUnit(u);
   drawFx();
   drawFore();
+  drawLeaves();
   ctx.restore();
   if(G.flash > 0.02){
     ctx.globalAlpha = G.flash*0.5; px(0,0,W,H,"#ffffff"); ctx.globalAlpha = 1;
@@ -1156,6 +1599,7 @@ function drawTitle(){
   ctx.globalAlpha = 1;
   // tray drawn AFTER the scrim so the footer stays legible instead of
   // reading as dead black space
+  mbtn({...TITLE_SET, label:"SETTINGS"}, hoverMenu==="TITLESET");
   drawTray();
   txt("Buy units → they march right → shove the line onto their keep",
       W/2, 322, 8, "#d8cdb4", "center");
@@ -1224,12 +1668,14 @@ function render(){
   else if(G.scene==="intro")  drawIntro();
   else if(G.scene==="result") drawResult();
   else { drawBattlefield(); drawHUD(); }
+  if(G.overlay==="pause")         drawPauseMenu();
+  else if(G.overlay==="settings") drawSettingsMenu();
 }
 
 //////////////////////////////////////////////////////////////////////////////
 // INPUT
 //////////////////////////////////////////////////////////////////////////////
-let hoverCard = -1;
+let hoverCard = -1, hoverMenu = null, hoverGear = false;
 function toInternal(e){
   const r = cv.getBoundingClientRect();
   return { x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height };
@@ -1238,23 +1684,48 @@ function inBox(p,b){ return p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h
 
 function startBattle(){
   unlockAudio(); reset();
+  G.speed = OPT.fastDefault ? 2 : 1;
+  G.overlay = null;
   G.scene = "intro"; G.sceneT = 0;
   tone(392,0.18,"square",0.05,1.5); tone(523,0.26,"square",0.05,1.4,0.12);
 }
 
 cv.addEventListener("mousemove", e=>{
-  const p = toInternal(e); hoverCard = -1;
-  if(G.scene==="play") ORDER.forEach((k,i)=>{ if(inBox(p,cardRect(i))) hoverCard=i; });
-  cv.style.cursor = hoverCard>=0 ? "pointer" : "default";
+  const p = toInternal(e); hoverCard = -1; hoverMenu = null; hoverGear = false;
+  let hot = false;
+  if(G.overlay==="pause"){
+    for(const b of pauseLayout()) if(inBox(p,b)){ hoverMenu=b.label; hot=true; }
+  } else if(G.overlay==="settings"){
+    const L = settingsLayout();
+    for(const r of L.rows){
+      if(r.type==="slider"){
+        if(inBox(p,r.minus)){ hoverMenu=r.key+"-"; hot=true; }
+        if(inBox(p,r.plus)){ hoverMenu=r.key+"+"; hot=true; }
+        if(inBox(p,r.bar)) hot=true;
+      } else if(inBox(p,r.tog)) hot=true;
+    }
+    if(inBox(p,L.back)){ hoverMenu="BACK"; hot=true; }
+  } else if(G.scene==="title"){
+    if(inBox(p,TITLE_SET)){ hoverMenu="TITLESET"; hot=true; }
+  } else if(G.scene==="play"){
+    ORDER.forEach((k,i)=>{ if(inBox(p,cardRect(i))){ hoverCard=i; hot=true; } });
+    if(inBox(p,GEAR_BTN)){ hoverGear=true; hot=true; }
+    if(inBox(p,SPEED_BTN)) hot=true;
+  }
+  cv.style.cursor = hot ? "pointer" : "default";
 });
 cv.addEventListener("pointerdown", e=>{
   e.preventDefault(); unlockAudio();
   const p = toInternal(e);
-  if(G.scene==="title"){ startBattle(); return; }
+  if(menuClick(p)) return;                 // overlays swallow input first
+  if(G.scene==="title"){
+    if(inBox(p,TITLE_SET)){ G.overlay="settings"; unlockAudio(); return; }
+    startBattle(); return;
+  }
   if(G.scene==="result"){ startBattle(); return; }
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; return; }
   if(inBox(p,SPEED_BTN)){ G.speed = G.speed===1?2:1; return; }
-  if(inBox(p,MUTE_BTN)){ SND.muted = !SND.muted; return; }
+  if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
   ORDER.forEach((k,i)=>{ if(inBox(p,cardRect(i))) tryBuy(k); });
 });
 addEventListener("keydown", e=>{
@@ -1266,9 +1737,17 @@ addEventListener("keydown", e=>{
   else if(k==="2") tryBuy("knight");
   else if(k==="3") tryBuy("archer");
   else if(k==="s") G.speed = G.speed===1?2:1;
-  else if(k==="m") SND.muted = !SND.muted;
+  else if(k==="m"){
+    if(OPT.music>0 || OPT.sfx>0){ OPT._m=OPT.music; OPT._s=OPT.sfx; OPT.music=0; OPT.sfx=0; }
+    else { OPT.music=OPT._m??0.7; OPT.sfx=OPT._s??0.8; }
+    applyVolumes(); saveOpt();
+  }
   else if(k==="r"){ startBattle(); }
-  else if(k==="p") G.paused = !G.paused;
+  else if(k==="p" || k==="escape"){
+    if(G.overlay==="settings") G.overlay="pause";
+    else if(G.overlay==="pause") G.overlay=null;
+    else if(G.scene==="play") G.overlay="pause";
+  }
   else return;
   e.preventDefault();
 });
@@ -1296,11 +1775,12 @@ function step(now){
   let dt = (now-last)/1000; last = now;
   if(dt > 0.1) dt = 0.1;
   G.sceneT += dt;
+  G.wind += dt;          // render-only clock (sway, birds, leaves)
   tickMusic();
 
   if(G.scene==="intro" && G.sceneT > 2.3){ G.scene="play"; G.sceneT=0; }
 
-  if(!G.paused){
+  if(!G.paused && !G.overlay){
     // hit-stop lives in the loop, never in update(), so the headless
     // balance harness stays a pure function of dt.
     if(G.hitstop > 0){ G.hitstop -= dt; }
@@ -1313,7 +1793,7 @@ function step(now){
 function frame(now){ step(now); requestAnimationFrame(frame); }
 
 // boot
-bakeAll(); bakeCoin(); buildScenery(); fit();
+bakeAll(); bakeCoin(); bakeGear(); buildScenery(); fit();
 requestAnimationFrame(frame);
 setInterval(()=>{ const now=performance.now(); if(now-last > 220) step(now); }, 100);
 

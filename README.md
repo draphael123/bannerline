@@ -1,6 +1,6 @@
 # BANNERLINE
 
-A 2D pixel-art **lane pusher** — not tower defense. Gold trickles in, you buy units that march right, and where the two armies collide *is* the front line. Ground behind it takes your colour, the banner posts flip as it passes, and **the ground you hold pays your wages**. Push the line onto their keep to win.
+A 2D pixel-art **lane pusher** — not tower defense. Knights of a river keep against a goblin horde. Gold trickles in, you buy units that march right, and where the two armies collide *is* the front line. Ground behind it takes your colour, the banner posts flip as it passes, and **the ground you hold pays your wages**. Push the line onto their keep to win.
 
 **[Play it →](https://bannerline.vercel.app)**
 
@@ -10,8 +10,8 @@ A 2D pixel-art **lane pusher** — not tower defense. Gold trickles in, you buy 
 |---|---|
 | `1` / `2` / `3` or click | Buy Spearman / Knight / Archer |
 | `S` | Toggle 1× / 2× speed |
-| `M` | Mute |
-| `P` | Pause |
+| `Esc` / `P` / gear icon | Pause & settings |
+| `M` | Mute everything |
 | `R` | Restart |
 
 ## The triangle
@@ -38,6 +38,25 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 **Archers kite slowly, on a budget, and barely scratch stone.** They retreat at 0.68× speed with a 14-unit total budget, then stand and die — otherwise an unkillable archer ball forms. They also do 0.30× damage to keeps, so archers alone can't siege.
 
+## Settings
+
+Reachable from the title screen or the in-game gear icon (`Esc` / `P`). All options persist to `localStorage`:
+
+- **Music** and **Sound** volumes, on independent audio buses (0–100%)
+- **Screen shake** — off for motion sensitivity
+- **Damage numbers** — off for a cleaner field
+- **Start at 2×** — skip the slow opening
+
+The pause menu offers Resume / Settings / Restart / Quit to title.
+
+## Art direction
+
+Two **factions**, not a palette swap: blue-and-steel humans versus a green goblin horde — spear skirmishers with lashed flint, a hulking brute with a bone club and plank shield, and a hooded shaman carrying a burning skull-staff. The player defends a crenellated stone keep; the goblins hold a sharpened-log palisade crowned with a skull totem. Two silhouettes beat one silhouette in two colours for readability in a crowd.
+
+Everything is grounded with drop shadows, banded vertical shading and a warm sun band. Trees, bushes and banners sway on individual phases (baked lean frames, so the treeline never pulses in unison), birds cross the sky, and leaves drift through the field — all pure functions of a render-only `wind` clock, so ambient life costs the simulation nothing.
+
+The front line is sold by churned earth and a dust haze over the clash rather than a neon seam.
+
 ## Balance harness
 
 Balance is tested headlessly, not eyeballed. In the console:
@@ -50,7 +69,7 @@ __bannerline.sim(190, (G, buy) => { if (G.gold >= 30) buy("spear"); })
 
 | Check | Target | Current |
 |---|---|---|
-| Player running AI's exact algorithm | ~50% | 24W/18L over 42 runs |
+| Player running AI's exact algorithm | ~50% | 33W/30L over 63 runs |
 | Stalemates | none | 0/21 |
 | Doing nothing | always loses | 0/17 |
 | Any mono-unit strategy | loses | 0/17 each |
