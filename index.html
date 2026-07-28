@@ -117,6 +117,23 @@ function saveOpt(){
 }
 const SND = { get muted(){ return OPT.sfx <= 0 && OPT.music <= 0; } };
 let SFXBUS = null, MUSBUS = null;
+let TRACKS = null, TRACK_KEY = "";
+function buildRecordedMusic(){
+  if(TRACKS) return;
+  const make=src=>{
+    const a=new Audio(src); a.loop=true; a.preload="metadata";
+    a.volume=Math.min(1,OPT.music*.42); return a;
+  };
+  TRACKS={
+    menu:make("assets/music/menu-old-tower.mp3"),
+    world0:make("assets/music/medieval-battle.mp3"),
+    world1:make("assets/music/frostreach-winter.wav"),
+    world2:make("assets/music/ember-desert.mp3"),
+    boss0:make("assets/music/war-theme.ogg"),
+    boss1:make("assets/music/boss-white-terror.mp3"),
+    boss2:make("assets/music/boss-ash-tyrant.mp3"),
+  };
+}
 function unlockAudio(){
   if(AC) return;
   try{
@@ -124,12 +141,12 @@ function unlockAudio(){
     MASTER = AC.createGain(); MASTER.gain.value = 0.9; MASTER.connect(AC.destination);
     SFXBUS = AC.createGain(); SFXBUS.gain.value = OPT.sfx;   SFXBUS.connect(MASTER);
     MUSBUS = AC.createGain(); MUSBUS.gain.value = OPT.music; MUSBUS.connect(MASTER);
+    buildRecordedMusic();
   }catch(e){ AC = null; }
 }
 function applyVolumes(){
-  if(!AC) return;
-  SFXBUS.gain.value = OPT.sfx;
-  MUSBUS.gain.value = OPT.music;
+  if(AC){ SFXBUS.gain.value = OPT.sfx; MUSBUS.gain.value = OPT.music; }
+  if(TRACKS) for(const a of Object.values(TRACKS)) a.volume=Math.min(1,OPT.music*.42);
 }
 function tone(freq, dur, type, vol, slide, delay, bus){
   if(!AC) return;
@@ -163,6 +180,20 @@ const MOTIFS = [
 ];
 function tickMusic(){
   if(!AC || OPT.music <= 0 || G.scene==="result" || G.overlay) return;
+  buildRecordedMusic();
+  const inBattle=G.scene==="intro"||G.scene==="play";
+  const w=inBattle?(battle().world||0):0;
+  const wanted=!inBattle ? "menu"
+    : (battle().objective||{}).type==="boss" ? "boss"+w : "world"+w;
+  if(TRACK_KEY!==wanted){
+    for(const a of Object.values(TRACKS)) a.pause();
+    TRACK_KEY=wanted; TRACKS[wanted].currentTime=0;
+  }
+  const recorded=TRACKS[wanted];
+  if(recorded.paused) recorded.play().catch(()=>{});
+  // The oscillator score remains below as a zero-download fallback for
+  // browsers that cannot decode the bundled MP3/OGG tracks.
+  if(!recorded.error) return;
   const now = AC.currentTime;
   if(MUS.next < now) MUS.next = now + 0.05;
   while(MUS.next < now + 0.4){
@@ -1197,23 +1228,23 @@ const BATTLES = [
     boss:{at:40, hpTrigger:0.45, type:"chieftain"}, objective:{type:"raze"},
     brief:"Marsh closes both flanks. Three lanes only \u2014 and their chieftain waits." },
   { world:0, name:"THE MUSTERING", pressure:1.03, atmo:2, blocked:[],
-    boss:null, comp:"heavy", objective:{type:"raze"},
-    brief:"The Overchieftain's guard is gathering. Break its camp." },
+    boss:null, comp:"heavy", mechanic:"drums", objective:{type:"demolish", count:3},
+    brief:"War drums call fresh troops. Destroy all three before the host gathers." },
   { world:0, name:"THE OVERCHIEFTAIN", pressure:1.10, atmo:2, blocked:[],
     boss:{at:0, hpTrigger:1, type:"overchief"}, comp:"heavy", landmark:"warcamp",
     objective:{type:"boss"},
     brief:"No walls. No retreat. Kill the Overchieftain." },
   // --- II. THE FROSTREACH ---------------------------------------------
   { world:1, name:"THE WHITE MARCH", pressure:1.00, atmo:3, blocked:[], boss:null,
-    comp:"swarm", objective:{type:"raze"},
-    brief:"They come in numbers across the snow. Numbers, not quality." },
+    comp:"swarm", mechanic:"blizzard", objective:{type:"raze"},
+    brief:"Blizzards smother arrows. Push when the sky clears." },
   { world:1, name:"THE FROZEN FORD", pressure:1.18, atmo:3, blocked:[2], boss:null,
     comp:"heavy", objective:{type:"hold", count:5, seconds:18},
     brief:"The river splits the field. HOLD five banners for eighteen seconds." },
   { world:1, name:"THE ICE CHIEFTAIN", pressure:1.12, atmo:3, blocked:[],
-    boss:{at:34, hpTrigger:0.5, type:"chieftain"}, comp:"heavy",
+    boss:{at:34, hpTrigger:0.5, type:"chieftain"}, comp:"heavy", mechanic:"breakingIce",
     objective:{type:"raze"},
-    brief:"Their chieftain has wintered here. He is bigger for it." },
+    brief:"The ice cracks beneath whole lanes. Watch the warning and redeploy." },
   { world:1, name:"THE WHITE TERROR", pressure:1.24, atmo:3, blocked:[],
     boss:{at:0, hpTrigger:1, type:"frostroc"}, comp:"swarm", landmark:"eyrie",
     objective:{type:"boss"},
@@ -1230,9 +1261,9 @@ const BATTLES = [
     comp:"swarm", objective:{type:"survive", seconds:70}, keepMul:0.72,
     brief:"You cannot win this one. SURVIVE seventy seconds." },
   { world:2, name:"THE WARCHIEF'S PYRE", pressure:1.24, atmo:4, blocked:[],
-    boss:{at:26, hpTrigger:0.7, type:"warchief"}, comp:"heavy",
-    objective:{type:"raze"},
-    brief:"The last of them. Kill the Warchief's host and be done." },
+    boss:{at:26, hpTrigger:0.7, type:"warchief"}, comp:"heavy", mechanic:"pyres",
+    objective:{type:"demolish", count:3},
+    brief:"Three war pyres feed their muster. Put every flame out." },
   { world:2, name:"THE ASH TYRANT", pressure:1.46, atmo:4, blocked:[],
     boss:{at:0, hpTrigger:1, type:"ashtyrant"}, comp:"ranged", landmark:"caldera",
     objective:{type:"boss"},
@@ -1267,6 +1298,7 @@ const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army", beat:0,
   ignorePortrait:false,
   lane:2, laneFlash:0, bossOut:false, holdT:0, geyT:0, geyFire:0,
+  objects:[], hazardT:0, hazardRow:2, hazardFire:0, blizzard:0,
   balT:0, balShot:null,
   tut:{on:false, i:0, t:0, laneMoved:false},
   t:0, over:null, speed:1, paused:false,
@@ -1286,6 +1318,22 @@ let UID = 1;
 
 const BANNER_X = [14, 28, 42, 58, 72, 86];
 function resetBanners(){ G.banners = BANNER_X.map(x => ({x, owner:x<50?1:-1, pop:0, pay:0})); }
+function resetBattleObjects(){
+  G.objects=[];
+  if(battle().mechanic==="drums"){
+    G.objects=[
+      {kind:"drum",x:62,row:0,hp:150,max:150,t:4.5},
+      {kind:"drum",x:76,row:2,hp:170,max:170,t:7.0},
+      {kind:"drum",x:90,row:4,hp:190,max:190,t:9.5},
+    ];
+  } else if(battle().mechanic==="pyres"){
+    G.objects=[
+      {kind:"pyre",x:61,row:1,hp:190,max:190,t:3},
+      {kind:"pyre",x:76,row:3,hp:210,max:210,t:5},
+      {kind:"pyre",x:90,row:2,hp:230,max:230,t:7},
+    ];
+  }
+}
 
 function reset(){
   G.t=0; G.over=null; G.speed=1;
@@ -1294,15 +1342,18 @@ function reset(){
   G.dying=[]; G.slashes=[]; G.stuck=[]; G.scars=[];
   const kh = Math.round(keepMaxHp() * (battle().keepMul || 1));
   const objectiveType = (battle().objective||{}).type;
-  const ek = objectiveType === "survive" || objectiveType === "boss" ? 99999 : 520;
+  const ek = objectiveType === "survive" || objectiveType === "boss" ||
+             objectiveType === "demolish" ? 99999 : 520;
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false; G.holdT=0;
   G.geyT=0; G.geyFire=0; G.balT=0; G.balShot=null;
+  G.hazardT=0; G.hazardRow=2; G.hazardFire=0; G.blizzard=0;
   G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
   G.stats={sent:0, spent:0, kills:0, maxFront:50};
   resetBanners();
+  resetBattleObjects();
 }
 reset();
 
@@ -1428,13 +1479,15 @@ function attack(u, target){
   const T = u.T;
   const rally = u.rallyT > 0;
   const morale = bannerMorale(u);
+  const weather = T.ranged ? (1-G.blizzard*0.42) : 1;
   u.cd = rally ? T.rate/1.45 : T.rate/(morale?1.10:1);
   u.atkAnim = 0.24;
   if(T.ranged){
     G.shots.push({
       x:u.x, y:u.y-18, tx:target.x, ty:target.y-14, side:u.side,
       t:0, dur: Math.max(0.16, Math.abs(target.x-u.x)*0.015),
-      dmg: T.dmg * ((T.bonus && T.bonus[target.T.cls]) || 1) * (rally?1.15:morale?1.10:1),
+      dmg: T.dmg * ((T.bonus && T.bonus[target.T.cls]) || 1) *
+           (rally?1.15:morale?1.10:1) * weather,
       src:"arrow", target, aoe:T.aoe||0, row:target.row,
     });
     tone(T.aoe ? 300 : 900, 0.05, T.aoe?"sawtooth":"triangle", 0.022, T.aoe?1.8:0.6);
@@ -1501,6 +1554,22 @@ function bannersHeld(side){
   for(const b of G.banners) if(b.owner === side) n++;
   return n;
 }
+
+function attackObject(u, o){
+  u.cd=u.T.rate; u.atkAnim=0.24;
+  const dmg=u.T.dmg*(u.T.ranged?0.55:1);
+  o.hp=Math.max(0,o.hp-dmg);
+  pushNum(o.x,ROW_Y[o.row]-8,Math.round(dmg),"#ffe08a");
+  G.shake=Math.max(G.shake,1.4); thud(0.1,0.045,520);
+  if(o.hp<=0 && !o.dead){
+    o.dead=true; G.flash=Math.max(G.flash,.28); G.shake=5;
+    G.toast=o.kind==="drum"?"WAR DRUM SILENCED":"WAR PYRE QUENCHED"; G.toastT=1.6;
+    for(let i=0;i<22;i++) G.parts.push({
+      x:o.x,y:ROW_Y[o.row]-10,vx:(Math.random()*2-1)*45,vy:-Math.random()*90-15,
+      life:.45+Math.random()*.55,c:o.kind==="pyre"?(i%2?"#ff7a32":"#4a3028"):(i%2?"#b98246":"#dbc089"),s:2});
+    tone(o.kind==="drum"?180:120,.35,"sawtooth",.04,.55);
+  }
+}
 function bannerMorale(u){
   for(const b of G.banners)
     if(b.owner===u.side && Math.abs(b.x-u.x)<=6) return true;
@@ -1515,7 +1584,11 @@ function goldRate(side){
   const empire = side < 0 ? hordeResponse() : 1;
   const wm = world().income;
   const lp = pressure();
-  return base * terr * empire * wm * (side < 0 ? diff().income * enemyOpening() * lp : incomeMul());
+  let special=1;
+  if(side<0 && battle().mechanic==="pyres")
+    special=1+G.objects.filter(o=>!o.dead&&o.kind==="pyre").length*0.10;
+  return base * terr * empire * wm * special *
+    (side < 0 ? diff().income * enemyOpening() * lp : incomeMul());
 }
 
 // Which lane the AI reinforces. At laneIQ 2 it reads the field: shore up the
@@ -1647,6 +1720,44 @@ function update(dt){
     }
     if(G.geyFire > 0) G.geyFire -= dt;
   }
+  if(battle().mechanic==="blizzard"){
+    const phase=G.t%18;
+    const target=phase>=10&&phase<15 ? 1 : 0;
+    G.blizzard+=(target-G.blizzard)*Math.min(1,dt*2.4);
+    if(phase>=10 && phase-dt<10){
+      G.toast="BLIZZARD — ARROWS WEAKEN"; G.toastT=2;
+      tone(115,.6,"sawtooth",.025,.7);
+    }
+  } else G.blizzard=0;
+  if(battle().mechanic==="breakingIce"){
+    G.hazardT+=dt;
+    if(G.hazardT>=9 && G.hazardT-dt<9){
+      G.hazardFire=1;
+      for(const u of G.units){
+        if(u.dead||u.row!==G.hazardRow) continue;
+        damage(u,32,"blast"); u.kb+=u.side*(Math.random()<.5?-1:1)*1.8;
+      }
+      G.toast="THE ICE BREAKS"; G.toastT=1.4; G.shake=7;
+      thud(.45,.1,190);
+    }
+    if(G.hazardT>=12){
+      G.hazardT=0;
+      const open=[]; for(let i=0;i<ROWS;i++) if(laneOpen(i)&&i!==G.hazardRow) open.push(i);
+      G.hazardRow=open[Math.floor(Math.random()*open.length)];
+    }
+    G.hazardFire=Math.max(0,G.hazardFire-dt*.75);
+  }
+  for(const o of G.objects){
+    if(o.dead) continue;
+    o.t-=dt;
+    if(o.kind==="drum" && o.t<=0){
+      o.t=11+Math.random()*3;
+      const troop=spawn(Math.random()<.35?"shield":"spear",-1,o.row);
+      troop.x=Math.min(98,o.x+5);
+      G.toast="THE WAR DRUM CALLS"; G.toastT=1.1;
+      tone(120,.18,"square",.04,.6); tone(90,.25,"square",.03,.5,.12);
+    }
+  }
 
   for(const u of G.units){
     if(u.dead) continue;
@@ -1688,6 +1799,11 @@ function update(dt){
     if(u.kb){ u.x += u.kb*dt*6; u.kb *= 0.86; if(Math.abs(u.kb)<0.02) u.kb=0; }
 
     const tgt = nearestEnemy(u);
+    let objTgt=null, objDist=1e9;
+    if(u.side>0) for(const o of G.objects){
+      if(o.dead||o.row!==u.row||o.x<u.x-1) continue;
+      const d=Math.abs(o.x-u.x); if(d<objDist){ objDist=d; objTgt=o; }
+    }
     const keep = u.side>0 ? G.keepE : G.keepP;
     const keepDist = u.side > 0 && (battle().objective||{}).type === "boss"
       ? Infinity : Math.abs(keep.x - u.x);
@@ -1701,6 +1817,9 @@ function update(dt){
     if(tgt && tgt.d <= T.reach){
       engaged = true;
       if(u.cd <= 0) attack(u, tgt.u);
+    } else if(objTgt && objDist <= Math.min(T.reach,12)+2){
+      engaged=true;
+      if(u.cd<=0) attackObject(u,objTgt);
     } else if(keepDist <= keepReach){
       engaged = true;
       if(u.cd <= 0) attackKeep(u, keep);
@@ -1845,6 +1964,10 @@ function update(dt){
     const bossAlive = G.units.some(u => u.side < 0 && u.T.boss);
     if(G.bossOut && !bossAlive) endGame("VICTORY", "The tyrant is dead.");
     else if(G.timeLeft <= 0) endGame("DEFEAT", "The boss still stands.");
+  } else if(obj.type === "demolish"){
+    const left=G.objects.filter(o=>!o.dead).length;
+    if(left===0) endGame("VICTORY", obj.count+" targets destroyed.");
+    else if(G.timeLeft<=0) endGame("DEFEAT", left+" targets still stand.");
   } else {
     if(G.keepE.hp <= 0) endGame("VICTORY", "Their keep is rubble.");
     else if(G.timeLeft <= 0){
@@ -2108,15 +2231,17 @@ function drawWeather(){
       ctx.globalAlpha = 1;
     }
   } else if(A.weather === "snow"){
-    for(let i=0;i<70;i++){
+    const storm=G.blizzard||0;
+    for(let i=0;i<70+Math.round(storm*80);i++){
       const t = (G.wind*0.22 + i*0.0143) % 1;
-      const sxp = ((i*151) % (W+40)) - 20 + Math.sin(G.wind*0.9 + i)*9;
+      const sxp = ((i*151) % (W+40)) - 20 + Math.sin(G.wind*0.9 + i)*9-t*storm*95;
       const sy = -8 + t*(H+16);
-      ctx.globalAlpha = 0.72;
+      ctx.globalAlpha = 0.72+storm*.18;
       const sz = 1 + (i%3===0?1:0);
       px(sxp, sy, sz, sz, "#ffffff");
       ctx.globalAlpha = 1;
     }
+    if(storm>.05){ ctx.globalAlpha=storm*.18; px(0,0,W,300,"#eaf7ff"); ctx.globalAlpha=1; }
   }
 }
 function drawWash(){
@@ -2236,6 +2361,22 @@ function drawTerritory(){
       ctx.globalAlpha = 1;
       glow(gx, gyy-h*0.5, 60, "rgba(255,150,50,1)", 0.8);
     }
+  }
+  if(battle().mechanic==="breakingIce"){
+    const y=GROUND_Y+ROW_Y[G.hazardRow], warn=G.hazardT>=7;
+    ctx.globalAlpha=warn ? .55 : .18;
+    px(0,y-6,W,12,warn?"#a9e8f2":"#d8f5fa");
+    for(let x=8;x<W;x+=23){
+      const jag=Math.sin(x*.8)*4;
+      px(x,y+jag,13,2,warn?"#477b91":"#8ab6c4");
+      if(warn) px(x+6,y+jag-4,2,9,"#477b91");
+    }
+    if(warn){
+      const pulse=.35+Math.sin(G.wind*18)*.25;
+      glow(W/2,y,120,"rgba(150,235,255,1)",pulse);
+      txt(G.hazardT<9?"ICE CRACKING":"BROKEN ICE",W/2,y-9,8,"#eaffff","center");
+    }
+    ctx.globalAlpha=1;
   }
   for(const s of SCENERY.field){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 
@@ -2434,6 +2575,29 @@ function drawBattleLandmark(){
   ctx.restore();
 }
 
+function drawBattleObjects(){
+  for(const o of G.objects){
+    const x=sx(o.x), y=GROUND_Y+ROW_Y[o.row];
+    if(o.dead){
+      ctx.globalAlpha=.55; px(x-10,y-2,21,4,"#38291f"); px(x-5,y-6,11,4,"#59402b");
+      ctx.globalAlpha=1; continue;
+    }
+    if(o.kind==="drum"){
+      px(x-7,y-20,15,18,"#5a3525"); px(x-5,y-18,11,14,"#b46b38");
+      px(x-7,y-20,15,3,"#e0bc72"); px(x-7,y-5,15,3,"#3b281f");
+      px(x-10,y-24,3,22,P.woodD); px(x+9,y-24,3,22,P.woodD);
+      const beat=Math.max(0,1-o.t/1.2);
+      if(beat>0) glow(x,y-12,24,"rgba(255,190,90,1)",beat*.45);
+    } else {
+      px(x-9,y-6,19,6,"#33221d"); px(x-6,y-14,4,10,"#5a3727"); px(x+3,y-18,4,14,"#5a3727");
+      const f=.65+Math.sin(G.wind*7+o.x)*.25;
+      px(x-6,y-23,13,11,"#e9542e"); px(x-3,y-27,7,12,"#ffb23f");
+      glow(x,y-18,30,"rgba(255,92,35,1)",f*.42);
+    }
+    capsule(x-13,y-31,26,3,o.hp/o.max,o.kind==="drum"?"#d6a357":"#e45b35","#ffffff80");
+  }
+}
+
 // Procedural smoke column — pure function of the wind clock, no state.
 function smokeColumn(x, y, strength, seed){
   for(let i=0;i<10;i++){
@@ -2537,7 +2701,8 @@ function drawUnit(u){
             :               S.frames[(u.vari||0)*FRAMES + frame];
   const k = rankScale(u.row);
   const x = Math.round(sx(u.x + u.vox)) + lunge;
-  const y = Math.round(GROUND_Y + u.y) + sag - (u.type==="frostroc"?18+Math.sin(G.wind*3)*3:0);
+  let y = Math.round(GROUND_Y + u.y) + sag - (u.type==="frostroc"?18+Math.sin(G.wind*3)*3:0);
+  if(!u.fighting && u.atkAnim<=0 && (frame===1||frame===3)) y-=1;
   const pop = u.pop;                          // spawn squash, then settle
   const sw = k * (1 + pop*0.5), sh = k * (1 - pop*0.35);
   const dw = Math.round(S.w*sw), dh = Math.round(S.h*sh);
@@ -2547,7 +2712,21 @@ function drawUnit(u){
   px(x-shw/2,   y-2, shw,   2, "#000");
   px(x-shw/2+3, y,   shw-6, 1, "#000");
   ctx.globalAlpha = 1;
-  ctx.drawImage(img, Math.round(x-dw/2), y-dh, dw, dh);
+  // Pivot at the boots: a slight marching lean, a committed strike, and
+  // directional hit recoil give the baked frames weight without blur-heavy
+  // tweening or dozens of extra sprite sheets.
+  let tilt=0;
+  if(!u.fighting && u.atkAnim<=0) tilt=Math.sin(u.bob*.8)*.018*u.side;
+  if(u.atkAnim>0.14) tilt=-.07*u.side;
+  if(u.flash>0) tilt=.055*u.side;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(tilt);
+  ctx.drawImage(img, Math.round(-dw/2), -dh, dw, dh);
+  ctx.restore();
+  if(u.fighting && u.cd>0 && u.cd<.09){
+    ctx.globalAlpha=(.09-u.cd)*7;
+    px(x+u.side*Math.round(dw*.42)-1,y-dh+5,3,3,"#fff3b0");
+    ctx.globalAlpha=1;
+  }
   // emissive bits
   if(u.type === "archer" && u.side < 0)
     glow(x + u.side*-11*k, y - dh + 7*k, 13*k, "rgba(255,150,40,1)", 0.40);
@@ -2981,23 +3160,32 @@ function drawHUD(){
     const boss=G.units.find(u=>u.side<0&&u.T.boss);
     line=boss ? "SLAY "+boss.T.name+"   "+Math.ceil(boss.hp)+" HP" : "THE BOSS IS COMING";
     dc="#ffcf85";
+  } else if(obj.type === "demolish"){
+    const left=G.objects.filter(o=>!o.dead).length;
+    line=(battle().mechanic==="drums"?"SILENCE THE WAR DRUMS   ":"QUENCH THE WAR PYRES   ")+left+" LEFT";
+    dc=left===1?"#a8ffd8":"#ffd0a0";
   } else {
     const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "HOLDING";
     line = "FRONT LINE: "+dir;
     dc = G.front > 50.5 ? "#9ff0d0" : G.front < 49.5 ? "#ffb0a0" : "#e8e0c8";
   }
   txt(line, W/2, 46, 9, dc, "center");
-  if(obj.type!=="boss" && world().tag && world().tag !== "OPEN GROUND"){
-    const t = world().tag;
+  if(obj.type!=="boss" && (world().tag || battle().mechanic) &&
+     (world().tag !== "OPEN GROUND" || battle().mechanic)){
+    const t = battle().mechanic==="blizzard" ? (G.blizzard>.35?"BLIZZARD — RANGED -42%":"CLEAR WINDOW")
+            : battle().mechanic==="breakingIce" ? (G.hazardT>=7?"ICE WARNING — CHANGE LANES":"ICE STABLE")
+            : battle().mechanic==="drums" ? "DRUMS MUST FALL"
+            : battle().mechanic==="pyres" ? "PYRES FEED ENEMY GOLD"
+            : world().tag;
     panel(W/2-58, 54, 116, 13, "#3a2a1e", P.panelD, P.panelL, 2);
     txt(t, W/2, 63, 7, "#ffc98a", "center", false);
   }
 
   // this corner used to hold the game's own name, which the player already
   // knows. It now holds the thing they most need: which battle, and where.
-  panel(8, 6, 150, 20, P.panel, P.panelD, P.panelL, 2);
+  panel(8, 6, 210, 20, P.panel, P.panelD, P.panelL, 2);
   txt(roman(G.battle)+".", 16, 20, 10, "#ffd75e", "left");
-  txt(battle().name.slice(0,17), 32, 20, 8, P.cream, "left", false);
+  txt(battle().name.slice(0,25), 32, 20, 8, P.cream, "left", false);
 
   const m = Math.floor(G.timeLeft/60), s = Math.floor(G.timeLeft%60);
   panel(W-114, 6, 74, 20, P.panel, P.panelD, P.panelL, 2);
@@ -3155,9 +3343,9 @@ function drawBattlefield(){
   ctx.save();
   if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
   drawSky(); drawBirds(); drawWater(); drawFarBank();
-  drawTerritory(); drawBattleLandmark(); drawLanes(); drawBanners();
+  drawTerritory(); drawBattleLandmark(); drawLanes(); drawBanners(); drawBattleObjects();
   drawKeep(G.keepP, 1);
-  if((battle().objective||{}).type !== "boss") drawKeep(G.keepE, -1);
+  if(!["boss","demolish"].includes((battle().objective||{}).type)) drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
   // depth-sort the living and the dying together so falling bodies stay in rank
   const cast = G.units.map(u=>({y:u.y, u})).concat(G.dying.map(d=>({y:d.y, d})));
@@ -3789,6 +3977,7 @@ function drawIntro(){
   const goal = ob.type==="hold"    ? "HOLD "+ob.count+" FLAGS FOR "+ob.seconds+"s"
              : ob.type==="survive" ? "SURVIVE "+ob.seconds+" SECONDS"
              : ob.type==="boss"    ? "SLAY THE BOSS"
+             : ob.type==="demolish"? "DESTROY ALL "+ob.count+" TARGETS"
              :                       "RAZE THEIR KEEP";
   ribbon(W/2-92+ox, 200, 184, 17, "#3d4a56", "#232d36", "#5d6b78");
   txt(goal, W/2+ox, 212, 9, "#a8ffd8", "center");
@@ -3798,6 +3987,10 @@ function drawIntro(){
   if(bt.blocked && bt.blocked.length) tags.push("LANES CLOSED");
   if(bt.boss) tags.push("CHAMPION");
   if(bt.comp) tags.push(bt.comp.toUpperCase()+" HORDE");
+  if(bt.mechanic==="drums") tags.push("WAR DRUMS");
+  if(bt.mechanic==="blizzard") tags.push("BLIZZARDS");
+  if(bt.mechanic==="breakingIce") tags.push("BREAKING ICE");
+  if(bt.mechanic==="pyres") tags.push("WAR PYRES");
   if(tags.length) txt(tags.join("   \u2022   "), W/2+ox, 248, 7, "#ffb49a", "center", false);
   ctx.globalAlpha = 1;
 }
@@ -3951,7 +4144,7 @@ cv.addEventListener("pointerdown", e=>{
     if(inBox(p,MAP_SHOP)){ G.scene="shop"; tone(600,0.08,"square",0.05,1.3); return; }
     if(inBox(p,MAP_WARB)){ G.scene="warband"; tone(640,0.08,"square",0.05,1.3); return; }
     if(inBox(p,MAP_BACK)){ G.scene="title"; G.sceneT=0; return; }
-    for(let i=0;i<9;i++){
+    for(let i=0;i<BATTLES.length;i++){
       if(SAVE.progress < i+1) continue;            // locked
       if(inBox(p, nodeBox(i))){ G.battle=i+1; startBattle(); break; }
     }
@@ -4077,6 +4270,14 @@ function frame(now){ step(now); requestAnimationFrame(frame); }
 // boot
 bakeAll(); bakeCoin(); bakeGear(); buildScenery(); fit();
 if(!OPT.introSeen){ G.scene = "opening"; G.sceneT = 0; G.beat = 0; }
+// Local-only level shortcut for visual checks: ?battle=3 opens that briefing.
+if(location.hostname==="127.0.0.1" || location.hostname==="localhost"){
+  const previewBattle=Number(new URLSearchParams(location.search).get("battle"));
+  if(previewBattle>=1 && previewBattle<=BATTLES.length){
+    G.battle=previewBattle; reset(); G.scene="intro"; G.sceneT=0;
+    G.tut.on=false;
+  }
+}
 requestAnimationFrame(frame);
 setInterval(()=>{ const now=performance.now(); if(now-last > 220) step(now); }, 100);
 
@@ -4098,12 +4299,43 @@ window.__bannerline = {
     }
     return this.snapshot();
   },
+  campaignSweep(trials=3){
+    const oldBattle=G.battle, oldDiff=OPT.difficulty, saved=JSON.stringify(SAVE), rows=[];
+    for(let d=0;d<DIFF.length;d++) for(let b=1;b<=BATTLES.length;b++){
+      let wins=0, ended=0, times=[];
+      for(let run=0;run<trials;run++){
+        G.battle=b; OPT.difficulty=d;
+        let next=0, lane=(run+b)%ROWS, buy=0;
+        const snap=this.sim(185,(g,purchase)=>{
+          if(g.t<next) return;
+          next=g.t+.72; lane=nearestOpenLane((lane+1)%ROWS); g.lane=lane;
+          const order=battle().mechanic==="drums"||battle().mechanic==="pyres"
+            ? ["spear","knight","spear","archer"]
+            : ["spear","knight","archer","spear"];
+          const pick=order[buy++%order.length];
+          if(g.gold>=TYPES[pick].cost) purchase(pick);
+        });
+        if(snap.over){ ended++; times.push(snap.t); }
+        if(snap.over&&snap.over.title==="VICTORY") wins++;
+      }
+      times.sort((a,b)=>a-b);
+      rows.push({
+        difficulty:DIFF[d].name,battle:b,name:BATTLES[b-1].name,
+        wins, trials, ended, median:times.length?times[Math.floor(times.length/2)]:null,
+      });
+    }
+    for(const k of Object.keys(SAVE)) delete SAVE[k];
+    Object.assign(SAVE,JSON.parse(saved)); saveGame();
+    G.battle=oldBattle; OPT.difficulty=oldDiff; reset();
+    return rows;
+  },
   snapshot(){ return {
     t:+G.t.toFixed(2), front:+G.front.toFixed(1),
     gold:Math.floor(G.gold), eGold:Math.floor(G.eGold),
     keepP:Math.ceil(G.keepP.hp), keepE:Math.ceil(G.keepE.hp),
     units:G.units.length, over:G.over,
     banners:G.banners.map(b=>b.owner),
+    objects:G.objects.map(o=>({kind:o.kind,hp:Math.ceil(o.hp),dead:!!o.dead})),
   };},
 };
 </script>

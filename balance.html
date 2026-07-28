@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bannerline campaign balance check</title>
+<style>
+  body{margin:0;background:#17120d;color:#ead9b2;font:14px ui-monospace,Consolas,monospace}
+  main{max-width:1080px;margin:32px auto;padding:0 24px}
+  h1{color:#ffd75e} .bad{color:#ff8f7a}.good{color:#8ee0b7}
+  table{border-collapse:collapse;width:100%}th,td{padding:7px;border-bottom:1px solid #463723;text-align:left}
+  iframe{position:fixed;left:-9999px;width:640px;height:360px}
+</style>
+<main><h1>Bannerline campaign balance check</h1><p id="status">Running 144 simulated battles…</p>
+<table><thead><tr><th>Tier</th><th>Battle</th><th>Ended</th><th>Wins</th><th>Median</th></tr></thead><tbody></tbody></table></main>
+<iframe src="index.html?battle=1"></iframe>
+<script>
+const frame=document.querySelector("iframe"), status=document.querySelector("#status"), body=document.querySelector("tbody");
+frame.addEventListener("load",()=>setTimeout(()=>{
+  try{
+    const rows=frame.contentWindow.__bannerline.campaignSweep(3);
+    for(const r of rows){
+      const tr=document.createElement("tr");
+      const healthy=r.ended===r.trials&&r.median!==null;
+      tr.className=healthy?"good":"bad";
+      tr.innerHTML=`<td>${r.difficulty}</td><td>${r.battle}. ${r.name}</td><td>${r.ended}/${r.trials}</td><td>${r.wins}/${r.trials}</td><td>${r.median??"—"}s</td>`;
+      body.append(tr);
+    }
+    const failed=rows.filter(r=>r.ended!==r.trials);
+    status.className=failed.length?"bad":"good";
+    status.textContent=failed.length?`${failed.length} configurations did not terminate. Review highlighted rows.`:"PASS — every simulated battle terminated.";
+  }catch(e){ status.className="bad"; status.textContent="CHECK FAILED — "+e.message; }
+},250));
+</script>

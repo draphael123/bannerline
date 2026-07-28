@@ -62,8 +62,12 @@ keep. Boss battles use normal unit deployment and end when the boss dies.
 
 Levels differ by more than scenery, which was the actual reason they felt samey:
 
-- **Objective** — `raze` their keep, `hold` five flags for eighteen seconds, or `survive` seventy seconds against a keep you cannot break.
+- **Objective** — raze a keep, hold five flags, survive a siege, slay a boss,
+  or demolish battlefield targets without an enemy castle.
 - **Terrain** — marsh or a frozen river closing lanes, enforced for both sides.
+- **Level mechanics** — war drums summon defenders until destroyed; blizzards
+  reduce ranged damage by 42%; breaking ice warns before damaging an entire
+  lane; and war pyres increase enemy income by 10% each until quenched.
 - **Composition** — the horde fields a swarm, a heavy column, or a shaman line.
 - **Enemy roster** — Runners punish open lanes, Shield Bearers absorb arrows,
   and Fire Bombers punish tightly packed troops after the opening levels.
@@ -231,6 +235,18 @@ Every sprite is **baked once at boot** into an offscreen canvas with a dark outl
 
 Hit-stop lives in the main loop, never inside `update()`, so the headless harness stays a pure function of `dt`.
 
+Open `balance.html` through the local server to run a repeatable 144-match
+campaign regression sweep. It reports termination, bot win rate, and median
+duration for every battle and difficulty tier without changing the player save.
+
+## Audio
+
+Seven recorded CC0 tracks provide a dedicated main-menu theme, one theme for
+each world, and a unique theme for each world boss. Source and license details
+live in `assets/music/CREDITS.md`. Interface and combat effects are generated
+in the browser with the Web Audio API. The procedural score remains as a
+fallback when a browser cannot decode a bundled track.
+
 ## Mobile
 
 The game is **landscape by design** — the whole point is seeing the entire battle line at once, which a portrait phone cannot show. So on a narrow portrait viewport it asks you to rotate, with a tap-to-play-anyway escape.
@@ -250,7 +266,8 @@ python -m http.server 5784
 ## Status
 
 The current prototype includes a persistent twelve-battle campaign across three
-worlds, dedicated world bosses, an expanded enemy roster, a campaign map,
+worlds, dedicated world bosses, four level-specific battlefield mechanics, an
+expanded enemy roster, a campaign map,
 warband selection, a bestiary, unlockable units, upgrades, four difficulty
 tiers, and desktop and landscape-mobile controls.
 
@@ -261,5 +278,5 @@ The next development phase should focus on maintainability and confidence:
 - turn the existing balance harness into repeatable automated checks;
 - add browser smoke tests for the title, campaign, shop, warband, battle, and
   save/load flows;
-- rebalance all twelve levels against the expanded enemy roster;
+- continue tuning all twelve levels from player feedback;
 - iterate on the new boss and enemy sprites with human feedback.
