@@ -47,7 +47,9 @@ Three battles, each with its own **rules** rather than just a bigger wave:
 |---|---|---|
 | I | Hold the Crossing | The baseline fight, clear day. |
 | II | The Narrows | Marsh closes both outer lanes — three lanes only, you cannot spread. Dusk. |
-| III | The Warchief | A 1300 HP champion walks in partway through. Storm. |
+| III | The Warchief | A 1050 HP champion walks in partway through. Storm. |
+
+⚠️ The Warchief shipped with **no working weakness**. Spears are its designed counter (3.2× vs heavy), but its 6.0-wide cleave farmed the single-file lane queue while only the front unit could hit back — the exact bug I had already fixed for the Knight, reintroduced at double the radius. Worse, it had `laneSpill:1` while melee has 0, so it attacked three lanes while only one could attack it: 300g of spears one lane over did **literally zero damage**. Fixed with a `bigTarget` flag (large units are reachable from neighbouring lanes), cleave cut to 3.2/0.35, and 1050 HP. Now 300g of spears kills it in ~16s with survivors, while the same gold in knights, archers or mages all fail.
 
 The Warchief triggers on **time or a last stand** (their keep dropping below 62%), whichever comes first — on a purely timed trigger a fast win meant you never met it. It's `heavy` class, so spears bring it down: the boss teaches the triangle rather than bypassing it.
 

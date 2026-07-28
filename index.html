@@ -825,10 +825,10 @@ const TYPES = {
     beats:"CROWDS", hint:"Hits every lane. Paper.",
   },
   warchief: {
-    key:"warchief", name:"WARCHIEF", cost:0, hp:1300, speed:2.6,
-    reach:3.4, dmg:30, rate:1.35, cls:"heavy",
-    cleave:6.0, cleaveMult:0.55, armor:{ arrow:0.5 }, laneSpill:1,
-    boss:true, beats:"EVERYTHING", hint:"Bring spears",
+    key:"warchief", name:"WARCHIEF", cost:0, hp:1050, speed:2.6,
+    reach:3.4, dmg:26, rate:1.45, cls:"heavy",
+    cleave:3.2, cleaveMult:0.35, armor:{ arrow:0.5 }, laneSpill:1, bigTarget:true,
+    boss:true, beats:"THE UNREADY", hint:"Massed spears bring it down",
   },
 };
 const ROSTER_ALL = ["spear","knight","archer","mage"];
@@ -862,7 +862,7 @@ const DIFF = [
   { name:"RECRUIT", income:0.62, cd:0.46, counterAt:4, laneIQ:0, delay:10,  ramp:28 },
   { name:"SOLDIER", income:0.82, cd:0.30, counterAt:3, laneIQ:1, delay:6.5, ramp:22 },
   { name:"VETERAN", income:1.00, cd:0.18, counterAt:2, laneIQ:2, delay:3.5, ramp:15 },
-  { name:"WARLORD", income:1.10, cd:0.15, counterAt:2, laneIQ:2, delay:2.5, ramp:12 },
+  { name:"MARSHAL", income:1.10, cd:0.15, counterAt:2, laneIQ:2, delay:2.5, ramp:12 },
 ];
 
 // 0 while mustering, then eases up to full over `ramp` seconds.
@@ -1009,7 +1009,9 @@ function nearestEnemy(u){
   let best=null, bd=1e9;
   for(const o of G.units){
     if(o.dead || o.side===u.side) continue;
-    if(Math.abs(o.row - u.row) > spill) continue;
+    // a bigTarget is so large that neighbouring lanes can reach it, which
+    // stops it attacking units that are unable to attack back
+    if(Math.abs(o.row - u.row) > (o.T.bigTarget ? Math.max(spill,1) : spill)) continue;
     const d = Math.abs(o.x - u.x);
     if(d < bd){ bd=d; best=o; }
   }
