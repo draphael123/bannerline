@@ -970,15 +970,19 @@ const WORLDS = [
   { name:"THE GREEN MARCHES", short:"MARCHES",
     ground:{p:"#6cc75f", pd:"#41984a", pl:"#93dc79", e:"#c4634a", ed:"#8b3f2f", el:"#dd8a6a"},
     speed:1.00, income:1.00,
+    tag:"OPEN GROUND",
     rule:"Open country. Nothing but them and you." },
   { name:"THE FROSTREACH", short:"FROSTREACH",
     ground:{p:"#bcd8e4", pd:"#7fa3b8", pl:"#e2f1f7", e:"#b08a92", ed:"#7c5b66", el:"#d4b0b4"},
-    speed:0.90, income:1.06,
-    rule:"Deep snow. Every soldier marches slower \u2014 both sides." },
+    speed:0.94, income:1.06, ice:true, lake:[36,64],
+    tag:"ICE \u2014 THEY SLIDE",
+    rule:"Black ice. Soldiers slide past where they meant to stop." },
   { name:"THE EMBER WASTE", short:"EMBER",
     ground:{p:"#c9a05e", pd:"#8e6a34", pl:"#e6c489", e:"#a34a34", ed:"#6d2a1e", el:"#c9705a"},
-    speed:1.00, income:1.24,
-    rule:"Scorched ground. Gold flows fast and the war burns hot." },
+    speed:1.00, income:1.18, burn:2.8,
+    geysers:[{x:42,row:1},{x:58,row:3}],
+    tag:"EMBERS \u2014 KEEPS BURN",
+    rule:"Both keeps are burning. Nobody can afford to wait." },
 ];
 function world(){ return WORLDS[battle().world || 0]; }
 // Levels were varied but not ESCALATING - the campaign was nine one-off
@@ -1021,7 +1025,9 @@ const BATTLES = [
     objective:{type:"raze"},
     brief:"Their chieftain has wintered here. He is bigger for it." },
   // --- III. THE EMBER WASTE -------------------------------------------
-  { world:2, name:"ASH AND CINDER", pressure:1.30, atmo:4, blocked:[1,3],
+  // no blocked lanes here: the geysers ARE this level's terrain, and they
+  // sit in lanes 1 and 3 - closing those made them unable to hit anything
+  { world:2, name:"ASH AND CINDER", pressure:1.30, atmo:4, blocked:[],
     boss:{at:44, hpTrigger:0.40, type:"chieftain"},
     comp:"ranged", objective:{type:"raze"},
     brief:"Lava scars the field. Their shamans hold the high ground." },
@@ -1062,7 +1068,7 @@ function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
 const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army", beat:0,
   ignorePortrait:false,
-  lane:2, laneFlash:0, bossOut:false, holdT:0,
+  lane:2, laneFlash:0, bossOut:false, holdT:0, geyT:0, geyFire:0,
   hero:null, heroCd:0, heroDead:0, rallyFx:0,
   tut:{on:false, i:0, t:0, laneMoved:false},
   t:0, over:null, speed:1, paused:false,
@@ -1095,6 +1101,7 @@ function reset(){
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.bossOut=false; G.holdT=0;
+  G.geyT=0; G.geyFire=0;
   G.hero=null; G.heroCd=0; G.heroDead=0; G.rallyFx=0;
   G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
@@ -1131,7 +1138,7 @@ function spawn(typeKey, side, row){
     cd: 0.25 + Math.random()*0.3,
     vox: (Math.random()*2-1)*1.7,
     vari: Math.floor(Math.random()*VARIANTS.length),
-    flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0,
+    flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0, slide:0,
     pop:1, step:Math.random()*6.28, lastStep:0,
   };
   G.units.push(u);
@@ -1443,6 +1450,35 @@ function update(dt){
   G.gold = Math.min(G.goldMax, G.gold + goldRate(1) * dt);
   enemyBrain(dt);
 
+  // --- world rules you can actually see ---------------------------------
+  const WR = world();
+  if(WR.burn){
+    // both keeps burn: turtling stops being an option for either side
+    G.keepP.hp = Math.max(0, G.keepP.hp - WR.burn*dt);
+    if(G.keepE.max < 9000) G.keepE.hp = Math.max(0, G.keepE.hp - WR.burn*dt);
+  }
+  if(WR.geysers){
+    G.geyT += dt;
+    if(G.geyT >= 6.0){
+      G.geyT = 0; G.geyFire = 0.45;
+      for(const gy of WR.geysers){
+        for(const u of G.units){
+          if(u.dead || u.row !== gy.row) continue;
+          if(Math.abs(u.x - gy.x) > 5.5) continue;
+          damage(u, 46, "blast");
+          u.kb += 1.4 * u.side;
+        }
+        G.rings.push({x:gy.x, y:ROW_Y[gy.row], r:4, life:0.4, c:"#ffb03a"});
+        for(let i=0;i<12;i++) G.parts.push({
+          x:gy.x, y:ROW_Y[gy.row], vx:(Math.random()*2-1)*30, vy:-Math.random()*130-40,
+          life:0.5+Math.random()*0.4, c:i%2?"#ffb03a":"#ffe08a", s:2 });
+      }
+      G.shake = Math.max(G.shake, 4);
+      thud(0.3, 0.08, 340);
+    }
+    if(G.geyFire > 0) G.geyFire -= dt;
+  }
+
   for(const u of G.units){
     if(u.dead) continue;
     const T = u.T;
@@ -1473,6 +1509,12 @@ function update(dt){
       if(u.cd <= 0) attackKeep(u, keep);
     }
 
+    // ICE: momentum built while marching carries him past his stop
+    if(engaged && u.slide > 0){
+      u.x += T.speed * u.slide * 0.75 * dt * u.side;
+      u.slide = Math.max(0, u.slide - dt*1.25);
+      if(Math.random() < dt*10) G.dust.push({x:u.x, y:u.y, life:0.32, r:1});
+    }
     if(!engaged){
       const ff = frontFriend(u);
       const packed = ff && ff.d < 2.4;
@@ -1482,6 +1524,11 @@ function update(dt){
       let moved = 0;
       if(!packed){ moved = spd*dt*u.side; u.x += moved; }
       else if(ff && ff.d < 3.4){ moved = spd*0.25*dt*u.side; u.x += moved; }
+      // ICE: build momentum while marching so stopping overshoots
+      if(world().ice && moved){
+        const onLake = u.x > world().lake[0] && u.x < world().lake[1];
+        u.slide = onLake ? 1.5 : 0.95;
+      }
       // footfall dust
       if(Math.abs(moved) > 0.001){
         u.step += Math.abs(moved)*0.55;
@@ -1948,6 +1995,37 @@ function drawTerritory(){
     }
     ctx.globalAlpha = 1;
   }
+  const WRv = world();
+  if(WRv.lake){                                   // the frozen lake reads as ice
+    const x0=sx(WRv.lake[0]), x1=sx(WRv.lake[1]);
+    ctx.globalAlpha=0.34; px(x0, BAND_TOP+6, x1-x0, BAND_BOT-BAND_TOP-12, "#cfe6f2");
+    ctx.globalAlpha=0.5;
+    for(let x=x0;x<x1;x+=14) px(x, BAND_TOP+10+((x*7)%(BAND_BOT-BAND_TOP-26)), 10, 1, "#ffffff");
+    ctx.globalAlpha=1;
+    px(x0, BAND_TOP+6, 2, BAND_BOT-BAND_TOP-12, "#eaf6fb");
+    px(x1-2, BAND_TOP+6, 2, BAND_BOT-BAND_TOP-12, "#eaf6fb");
+  }
+  if(WRv.geysers) for(const gy of WRv.geysers){
+    const gx = sx(gy.x), gyy = GROUND_Y + ROW_Y[gy.row];
+    const warn = G.geyT > 4.7;                    // telegraph before it blows
+    px(gx-7, gyy-3, 15, 4, "#5a3320");
+    px(gx-5, gyy-2, 11, 2, warn ? "#ff8a2a" : "#7a4a28");
+    if(warn){
+      const p = (G.geyT-4.7)/1.3;
+      ctx.globalAlpha = 0.4+Math.sin(G.wind*30)*0.3;
+      px(gx-4, gyy-6-p*6, 9, 5, "#ffb03a");
+      ctx.globalAlpha = 1;
+      glow(gx, gyy-6, 26*p, "rgba(255,140,40,1)", 0.5);
+    }
+    if(G.geyFire > 0){
+      const h = 70*Math.min(1, G.geyFire*3);
+      ctx.globalAlpha = Math.min(1, G.geyFire*2.5);
+      px(gx-5, gyy-h, 11, h, "#ffb03a");
+      px(gx-3, gyy-h-6, 7, h*0.6, "#ffe08a");
+      ctx.globalAlpha = 1;
+      glow(gx, gyy-h*0.5, 60, "rgba(255,150,50,1)", 0.8);
+    }
+  }
   for(const s of SCENERY.field){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
 
   // banded vertical shading — grounds the whole strip instead of a flat wash
@@ -2121,6 +2199,10 @@ function drawKeep(keep, side){
       px(tx-1, GROUND_Y-32, 2, 3, "#c6f2a8");
       glow(tx, GROUND_Y-29, 20, "rgba(120,230,90,1)", 0.38);
     }
+  }
+  if(world().burn){
+    smokeColumn(cx + (side>0?-8:8), y+16, 0.85, side>0?1.7:5.1);
+    glow(cx, GROUND_Y-34, 40, "rgba(255,120,40,1)", 0.28+Math.sin(G.wind*5)*0.06);
   }
   if(dmg >= 1) smokeColumn(cx + (side>0?-14:14), y+22, dmg===2?1.25:0.7, side>0?0:3.3);
   if(keep.ruin){
@@ -2578,6 +2660,11 @@ function drawHUD(){
     dc = G.front > 50.5 ? "#9ff0d0" : G.front < 49.5 ? "#ffb0a0" : "#e8e0c8";
   }
   txt(line, W/2, 46, 9, dc, "center");
+  if(world().tag && world().tag !== "OPEN GROUND"){
+    const t = world().tag;
+    panel(W/2-58, 54, 116, 13, "#3a2a1e", P.panelD, P.panelL, 2);
+    txt(t, W/2, 63, 7, "#ffc98a", "center", false);
+  }
 
   panel(8, 6, 116, 20, P.panel, P.panelD, P.panelL, 2);
   txt("BANNERLINE", 16, 20, 11, P.cream, "left");

@@ -43,11 +43,13 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 **Three worlds, three battles each.** A world has its own palette and its own standing rule; a level inside it varies by objective, terrain and who the horde fields.
 
-| World | Rule |
-|---|---|
-| **The Green Marches** | Open country. |
-| **The Frostreach** | Deep snow — every soldier marches 18% slower, both sides. |
-| **The Ember Waste** | Scorched ground — gold flows 24% faster and the war burns hot. |
+| World | Rule you can see | Terrain |
+|---|---|---|
+| **The Green Marches** | Open country — the baseline. | — |
+| **The Frostreach** | **Black ice.** Soldiers carry their momentum and slide past where they meant to stop, so lines overshoot into each other. | A frozen lake across the middle third, where they slide further still. |
+| **The Ember Waste** | **Both keeps burn** at 2.8 HP/s. Neither side can afford to wait. | Two geysers that erupt every 6s with a ~1.3s telegraph, for 46 damage to whoever is standing in that lane. |
+
+⚠️ The first version of these rules was *18% slower movement* and *24% faster gold*. Both were real and both were completely invisible in play — a world you can't perceive is a palette. Measured: on ice a unit now overshoots its stopping point by **10.6** world units against **6.8** on open ground.
 
 Levels differ by more than scenery, which was the actual reason they felt samey:
 
