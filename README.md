@@ -47,16 +47,32 @@ The AI picks lanes too, and how well it does so is part of difficulty.
 
 ## Difficulty
 
-Four tiers, set in Settings. They scale the AI's **generalship and purse — never unit stats** — so you're beating a better commander rather than smaller numbers.
+Four tiers, chosen **on the title screen** or in Settings. **Recruit is the default.** They scale the AI's generalship and purse — never unit stats — so you're beating a better commander rather than smaller numbers.
 
-| Tier | Enemy income | Decision interval | Counters at | Lane choice | Measured win rate |
-|---|---|---|---|---|---|
-| Recruit | 0.80x | 0.34s | 3 units | random | 95% |
-| Soldier *(default)* | 1.00x | 0.20s | 2 units | least-crowded | 63% |
-| Veteran | 1.12x | 0.14s | 2 units | tactical | 26% |
-| Warlord | 1.26x | 0.10s | 1 unit | tactical | 11% |
+Every tier also has a **muster period**: the enemy spends nothing for the first few seconds and their income ramps in gradually. Without it the opening was an ambush you couldn't learn from.
 
-Win rates are from 19 headless runs each against a player policy that mirrors the AI's own algorithm, including its lane logic. Median match length scales 43s to 110s across the tiers.
+| Tier | Enemy income | Muster | Ramp | Decision | Counters at | Lanes |
+|---|---|---|---|---|---|---|
+| **Recruit** *(default)* | 0.62x | 10s | 28s | 0.46s | 4 units | random |
+| Soldier | 0.82x | 6.5s | 22s | 0.30s | 3 units | least-crowded |
+| Veteran | 1.00x | 3.5s | 15s | 0.18s | 2 units | tactical |
+| Warlord | 1.10x | 2.5s | 12s | 0.15s | 2 units | tactical |
+
+Measured win rates, 19 headless runs per cell, against three player policies of increasing skill:
+
+| | Recruit | Soldier | Veteran | Warlord |
+|---|---|---|---|---|
+| Novice *(one lane, no counters, slow)* | 95% | 89% | 74% | 37% |
+| Learning *(rough counters, spreads lanes)* | 100% | 100% | 79% | 32% |
+| Fast *(tight cadence, tactical lanes)* | 100% | 100% | 84% | 5% |
+
+⚠️ **This is the measurement I got wrong the first time.** The original tiers were tuned against an expert bot that already knew the counter-triangle and optimal lane play, which scored the default at a comfortable 63%. But a *novice* policy — the honest proxy for a first-time human — won **0 of 17 on every tier including the easiest**. The game was unwinnable for anyone who didn't already know it. Always tune against a policy that plays as badly as a real beginner.
+
+Note the "Fast" row does *worse* than Novice at Warlord (5% vs 37%): dumping gold on a tight cadence starves you when the ramped wave lands. Banking beats spamming at high difficulty.
+
+## Tutorial
+
+The first ever battle is guided — nine steps that gate on what you actually do, not on timers alone: buy a unit, change lane, field four units, watch the line form. **The enemy is held off the field entirely until step 5**, so the opening is a lesson rather than an ambush. `Esc` skips it, and Settings has a **Replay Tutorial** action. Completion persists to `localStorage`.
 
 ## Settings
 

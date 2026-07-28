@@ -60,7 +60,7 @@ const P = {
 let AC = null, MASTER = null;
 // Player options. Persisted to localStorage so they survive a reload.
 const OPT = { music:0.7, sfx:0.8, shake:true, dmgNums:true, fastDefault:false,
-              difficulty:1 };
+              difficulty:0, tutorialDone:false };
 try{
   const raw = localStorage.getItem("bannerline.opt");
   if(raw) Object.assign(OPT, JSON.parse(raw));
@@ -687,17 +687,29 @@ const ORDER = ["spear","knight","archer"];
 // enemy's gold multiplier, `cd` its decision interval, `counterAt` how few of
 // your units it takes to trigger a counter-buy, `laneIQ` how smartly it picks
 // a lane (0 random, 1 least-crowded, 2 tactical).
+// `delay` is a muster period before the enemy spends anything, and `ramp` is
+// how long their income takes to reach full. A novice policy previously won
+// 0/17 on EVERY tier — the opening was simply too fast to learn against.
 const DIFF = [
-  { name:"RECRUIT",  income:0.80, cd:0.34, counterAt:3, laneIQ:0 },
-  { name:"SOLDIER",  income:1.00, cd:0.20, counterAt:2, laneIQ:1 },
-  { name:"VETERAN",  income:1.12, cd:0.14, counterAt:2, laneIQ:2 },
-  { name:"WARLORD",  income:1.26, cd:0.10, counterAt:1, laneIQ:2 },
+  { name:"RECRUIT", income:0.62, cd:0.46, counterAt:4, laneIQ:0, delay:10,  ramp:28 },
+  { name:"SOLDIER", income:0.82, cd:0.30, counterAt:3, laneIQ:1, delay:6.5, ramp:22 },
+  { name:"VETERAN", income:1.00, cd:0.18, counterAt:2, laneIQ:2, delay:3.5, ramp:15 },
+  { name:"WARLORD", income:1.10, cd:0.15, counterAt:2, laneIQ:2, delay:2.5, ramp:12 },
 ];
+
+// 0 while mustering, then eases up to full over `ramp` seconds.
+function enemyOpening(){
+  const D = diff();
+  if(G.t < D.delay) return 0;
+  if(!D.ramp) return 1;
+  return Math.min(1, (G.t - D.delay) / D.ramp);
+}
 function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
 
 const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false,
   lane:2, laneFlash:0,
+  tut:{on:false, i:0, t:0, laneMoved:false},
   t:0, over:null, speed:1, paused:false,
   gold:60, goldMax:240,
   eGold:60, eBrainCd:0,
@@ -722,6 +734,7 @@ function reset(){
   G.keepP={hp:400,max:400,x:-4}; G.keepE={hp:400,max:400,x:104};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
   G.lane=2; G.laneFlash=0;
+  G.tut={on:false, i:0, t:0, laneMoved:false};
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
   G.stats={sent:0, spent:0, kills:0, maxFront:50};
   resetBanners();
@@ -893,7 +906,7 @@ let TERR_K = 0.04;
 function goldRate(side){
   const base = 22 + Math.min(1, G.t/150) * 26;
   const terr = 1 - 3*TERR_K + TERR_K * bannersHeld(side);
-  return base * terr * (side < 0 ? diff().income : 1);
+  return base * terr * (side < 0 ? diff().income * enemyOpening() : 1);
 }
 
 // Which lane the AI reinforces. At laneIQ 2 it reads the field: shore up the
@@ -922,6 +935,8 @@ function aiLane(D){
 }
 
 function enemyBrain(dt){
+  if(G.tut.on && G.tut.i < TUT_ENEMY_STEP) return;   // tutorial holds them back
+  if(G.t < diff().delay) return;                     // muster period
   G.eGold = Math.min(G.goldMax, G.eGold + goldRate(-1) * dt);
   G.eBrainCd -= dt;
   if(G.eBrainCd > 0) return;
@@ -1626,7 +1641,10 @@ function cardRect(i){
 }
 const SPEED_BTN = {x:W/2-26, y:6, w:52, h:20};
 const GEAR_BTN  = {x:W-34, y:6, w:26, h:20};
-const TITLE_SET = {x:W-104, y:8, w:92, h:24};
+const TITLE_SET  = {x:W-104, y:8, w:92, h:24};
+const TDIFF_L    = {x:W/2-118, y:254, w:22, h:22};
+const TDIFF_V    = {x:W/2-92,  y:254, w:184, h:22};
+const TDIFF_R    = {x:W/2+96,  y:254, w:22, h:22};
 
 //////////////////////////////////////////////////////////////////////////////
 // MENUS — layouts are pure functions so draw and hit-test can never disagree
@@ -1643,6 +1661,7 @@ const SETTINGS_ROWS = [
   {key:"shake",       label:"SCREEN SHAKE",   type:"toggle"},
   {key:"dmgNums",     label:"DAMAGE NUMBERS", type:"toggle"},
   {key:"fastDefault", label:"START AT 2x",    type:"toggle"},
+  {key:"replayTut",   label:"REPLAY TUTORIAL",type:"action"},
 ];
 function settingsLayout(){
   const x=W/2-142, y0=108, rh=27;
@@ -1653,6 +1672,8 @@ function settingsLayout(){
       o.minus = {x:x+150, y:y+3, w:18, h:17};
       o.bar   = {x:x+172, y:y+7, w:74, h:9};
       o.plus  = {x:x+250, y:y+3, w:18, h:17};
+    } else if(r.type==="action"){
+      o.tog = {x:x+188, y:y+3, w:80, h:17};
     } else if(r.type==="choice"){
       o.minus = {x:x+150, y:y+3, w:18, h:17};
       o.val   = {x:x+170, y:y+3, w:78, h:17};
@@ -1698,6 +1719,8 @@ function drawSettingsMenu(){
       txt(Math.round(v*100)+"%", r.bar.x+r.bar.w/2, r.bar.y+8, 8,
           v>0?"#2a1e10":"#a09080", "center", false);
       mbtn({...r.plus, label:"+"}, hoverMenu===r.key+"+");
+    } else if(r.type==="action"){
+      mbtn({...r.tog, label:"START"}, hoverMenu===r.key);
     } else {
       const on = !!OPT[r.key];
       panel(r.tog.x, r.tog.y, r.tog.w, r.tog.h,
@@ -1734,6 +1757,10 @@ function menuClick(p){
         if(inBox(p,r.minus)){ OPT[r.key]=Math.max(0, +(OPT[r.key]-0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(420,0.05,"square",0.04); return true; }
         if(inBox(p,r.plus)) { OPT[r.key]=Math.min(1, +(OPT[r.key]+0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(700,0.05,"square",0.04); return true; }
         if(inBox(p,r.bar))  { OPT[r.key]=Math.max(0,Math.min(1,(p.x-r.bar.x)/r.bar.w)); applyVolumes(); saveOpt(); return true; }
+      } else if(r.type==="action" && inBox(p,r.tog)){
+        G.overlay=null; OPT.tutorialDone=false; saveOpt();
+        G.started=false; startBattle();
+        return true;
       } else if(inBox(p,r.tog)){
         OPT[r.key] = !OPT[r.key]; saveOpt();
         tone(OPT[r.key]?720:360, 0.07, "square", 0.045, 1.2);
@@ -1854,6 +1881,103 @@ function bakeCoin(){
 }
 
 //////////////////////////////////////////////////////////////////////////////
+// GUIDED TUTORIAL
+// Each step either waits a beat or waits for the player to actually DO the
+// thing. The enemy is held back entirely until TUT_ENEMY_STEP so the opening
+// is a lesson rather than an ambush.
+//////////////////////////////////////////////////////////////////////////////
+const TUT_ENEMY_STEP = 5;
+const TUT = [
+  { t:"This is your keep. That one is theirs.",
+    s:"Knock theirs down to win.", hi:"keeps", wait:3.4 },
+  { t:"Gold fills the bar as you wait.",
+    s:"Press  [1]  to send a SPEARMAN.", hi:"card0",
+    check:g => g.stats.sent >= 1 },
+  { t:"Your units march right on their own.",
+    s:"You choose WHAT and WHEN, never where they walk.", hi:null, wait:3.6 },
+  { t:"The bright band is your deployment lane.",
+    s:"Press  UP  or  DOWN  to change it.", hi:"lane",
+    check:g => g.tut.laneMoved },
+  { t:"Send three more. Numbers matter here.",
+    s:"Five fights happen side by side across the lanes.", hi:"cards",
+    check:g => g.stats.sent >= 4 },
+  { t:"Here they come.",
+    s:"Where the two armies meet is the FRONT LINE.", hi:null, wait:3.4 },
+  { t:"SPEAR beats KNIGHT beats ARCHER beats SPEAR.",
+    s:"Read what they field, then buy its counter.", hi:"cards", wait:5.2 },
+  { t:"Every banner behind your line pays you gold.",
+    s:"Push right to take them — ground is income.", hi:"banners", wait:4.6 },
+  { t:"That is everything. Break their keep.",
+    s:"Good luck, commander.", hi:"keeps", wait:3.4 },
+];
+
+function tutStart(){
+  G.tut = { on:true, i:0, t:0, laneMoved:false };
+}
+function tutStep(dt){
+  const T = G.tut;
+  if(!T.on) return;
+  const step = TUT[T.i];
+  if(!step){ tutFinish(); return; }
+  T.t += dt;
+  const done = step.check ? step.check(G) : (T.t >= (step.wait || 3));
+  if(done && T.t > 0.7){
+    T.i++; T.t = 0;
+    if(T.i >= TUT.length) tutFinish();
+    else tone(680, 0.09, "square", 0.045, 1.5);
+  }
+}
+function tutFinish(){
+  G.tut.on = false;
+  OPT.tutorialDone = true; saveOpt();
+  tone(523,0.16,"square",0.05,1.4); tone(784,0.22,"square",0.05,1.3,0.1);
+}
+
+// pulsing outline used to point at whatever the current step is about
+function tutRing(x,y,w,h){
+  const p = 0.45 + Math.sin(G.wind*7)*0.35;
+  ctx.globalAlpha = p;
+  rr(x-3, y-3, w+6, h+6, 2, "#ffe9a8");
+  ctx.globalAlpha = 1;
+  rr(x-1, y-1, w+2, h+2, 2, "rgba(0,0,0,0)");
+}
+
+function drawTutorial(){
+  const T = G.tut;
+  if(!T.on) return;
+  const step = TUT[T.i];
+  if(!step) return;
+  // highlight target
+  if(step.hi === "card0"){ const r = cardRect(0); tutRing(r.x, r.y, r.w, r.h); }
+  else if(step.hi === "cards"){
+    const a = cardRect(0), c = cardRect(ORDER.length-1);
+    tutRing(a.x, a.y, c.x + c.w - a.x, a.h);
+  }
+  else if(step.hi === "keeps"){
+    tutRing(sx(G.keepP.x)-34, GROUND_Y-KEEP_H, KEEP_W, KEEP_H);
+    tutRing(sx(G.keepE.x)-34, GROUND_Y-KEEP_H, KEEP_W, KEEP_H);
+  }
+  else if(step.hi === "lane"){
+    const y = laneY(G.lane);
+    tutRing(2, y-9, W-4, 18);
+  }
+  else if(step.hi === "banners"){
+    for(const b of G.banners) tutRing(sx(b.x)-4, BAND_TOP-6, 20, 52);
+  }
+  // prompt card
+  const bw = 380, bx = (W-bw)/2, by = 92;
+  panel(bx, by, bw, 42, "#2f3a46", "#1b232c", "#55636f", 2);
+  px(bx+3, by+3, 3, 36, "#ffd75e");
+  txt(step.t, W/2+2, by+18, 10, "#ffe9a8", "center");
+  txt(step.s, W/2+2, by+33, 8, "#dfe7ec", "center");
+  // progress pips
+  for(let i=0;i<TUT.length;i++)
+    px(bx + bw/2 - TUT.length*4 + i*8, by+38, 5, 2,
+       i < T.i ? "#ffd75e" : i === T.i ? "#fff6d2" : "#4a5560");
+  txt("[ESC] skip", bx+bw-6, by+12, 7, "#8fa0ad", "right", false);
+}
+
+//////////////////////////////////////////////////////////////////////////////
 // SCENES
 //////////////////////////////////////////////////////////////////////////////
 function drawBattlefield(){
@@ -1888,22 +2012,30 @@ function drawTitle(){
   txt("BANNERLINE", W/2, 127+bob, 42, "#ffd75e", "center", false);
   ribbon(W/2-104, 146, 208, 19, "#4a5560", "#2f3843", "#6d7a86");
   txt("THE GROUND IS THE SCOREBOARD", W/2, 160, 9, "#dfe7ec", "center");
-  panel(W/2-92, 196, 184, 26, P.panel, P.panelD, P.panelL, 2);
+  panel(W/2-92, 220, 184, 26, P.panel, P.panelD, P.panelL, 2);
   // pulse, never blank — an empty panel reads as a broken button
   const pulse = 0.72 + Math.sin(G.sceneT*4)*0.28;
   ctx.globalAlpha = pulse;
-  txt("CLICK OR PRESS ENTER", W/2, 214, 11, "#ffe9a8", "center");
+  txt("CLICK OR PRESS ENTER", W/2, 238, 11, "#ffe9a8", "center");
   ctx.globalAlpha = 1;
   // tray drawn AFTER the scrim so the footer stays legible instead of
   // reading as dead black space
   mbtn({...TITLE_SET, label:"SETTINGS"}, hoverMenu==="TITLESET");
+  // difficulty, front and centre
+  mbtn({...TDIFF_L, label:"<"}, hoverMenu==="TD-");
+  panel(TDIFF_V.x, TDIFF_V.y, TDIFF_V.w, TDIFF_V.h, "#33261a", P.panelD, P.panelL, 2);
+  txt("DIFFICULTY:  "+DIFF[OPT.difficulty].name, TDIFF_V.x+TDIFF_V.w/2,
+      TDIFF_V.y+15, 10, "#ffe9a8", "center");
+  mbtn({...TDIFF_R, label:">"}, hoverMenu==="TD+");
+  if(!OPT.tutorialDone)
+    txt("first battle is guided", W/2, 290, 8, "#9fd6bd", "center");
   drawTray();
   txt("Buy units → they march right → shove the line onto their keep",
       W/2, 322, 8, "#d8cdb4", "center");
   txt("1 2 3  buy    •    S  speed    •    M  mute    •    R  restart",
       W/2, 340, 8, "#a89c84", "center");
   // the triangle, taught before the first battle
-  const cy = 291;
+  const cy = 212;
   ORDER.forEach((k,i)=>{
     const T = TYPES[k], S = SPR[k][1];
     const bx = W/2 - 150 + i*150;
@@ -1965,7 +2097,7 @@ function render(){
   if(G.scene==="title")       drawTitle();
   else if(G.scene==="intro")  drawIntro();
   else if(G.scene==="result") drawResult();
-  else { drawBattlefield(); drawHUD(); }
+  else { drawBattlefield(); drawHUD(); drawTutorial(); }
   if(G.overlay==="pause")         drawPauseMenu();
   else if(G.overlay==="settings") drawSettingsMenu();
 }
@@ -1985,6 +2117,7 @@ function startBattle(){
   if(G.started) G.battle++;              // each battle gets the next sky
   G.started = true;
   reset();
+  if(!OPT.tutorialDone) tutStart();      // first ever battle is guided
   G.speed = OPT.fastDefault ? 2 : 1;
   G.overlay = null;
   G.scene = "intro"; G.sceneT = 0;
@@ -2008,6 +2141,8 @@ cv.addEventListener("mousemove", e=>{
     if(inBox(p,L.back)){ hoverMenu="BACK"; hot=true; }
   } else if(G.scene==="title"){
     if(inBox(p,TITLE_SET)){ hoverMenu="TITLESET"; hot=true; }
+    if(inBox(p,TDIFF_L)){ hoverMenu="TD-"; hot=true; }
+    if(inBox(p,TDIFF_R)){ hoverMenu="TD+"; hot=true; }
   } else if(G.scene==="play"){
     ORDER.forEach((k,i)=>{ if(inBox(p,cardRect(i))){ hoverCard=i; hot=true; } });
     if(inBox(p,GEAR_BTN)){ hoverGear=true; hot=true; }
@@ -2021,6 +2156,10 @@ cv.addEventListener("pointerdown", e=>{
   if(menuClick(p)) return;                 // overlays swallow input first
   if(G.scene==="title"){
     if(inBox(p,TITLE_SET)){ G.overlay="settings"; unlockAudio(); return; }
+    if(inBox(p,TDIFF_L)){ OPT.difficulty=(OPT.difficulty+DIFF.length-1)%DIFF.length;
+      saveOpt(); unlockAudio(); tone(420,0.06,"square",0.04); return; }
+    if(inBox(p,TDIFF_R)){ OPT.difficulty=(OPT.difficulty+1)%DIFF.length;
+      saveOpt(); unlockAudio(); tone(700,0.06,"square",0.04); return; }
     startBattle(); return;
   }
   if(G.scene==="result"){ startBattle(); return; }
@@ -2028,7 +2167,7 @@ cv.addEventListener("pointerdown", e=>{
   if(inBox(p,SPEED_BTN)){ G.speed = G.speed===1?2:1; return; }
   if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
   if(p.y > BAND_TOP-8 && p.y < BAND_BOT+8){        // click a lane to select it
-    G.lane = laneAt(p.y); G.laneFlash = 1;
+    G.lane = laneAt(p.y); G.laneFlash = 1; G.tut.laneMoved = true;
     tone(500+G.lane*40, 0.05, "square", 0.03); return;
   }
   ORDER.forEach((k,i)=>{ if(inBox(p,cardRect(i))) tryBuy(k); });
@@ -2039,9 +2178,9 @@ addEventListener("keydown", e=>{
   if(G.scene==="title" && (k==="enter"||k===" ")){ startBattle(); e.preventDefault(); return; }
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; }
   if(k==="arrowup" || k==="w"){ G.lane=Math.max(0,G.lane-1); G.laneFlash=1;
-    tone(560,0.05,"square",0.03); }
+    G.tut.laneMoved=true; tone(560,0.05,"square",0.03); }
   else if(k==="arrowdown"){ G.lane=Math.min(ROWS-1,G.lane+1); G.laneFlash=1;
-    tone(460,0.05,"square",0.03); }
+    G.tut.laneMoved=true; tone(460,0.05,"square",0.03); }
   else if(k==="1") tryBuy("spear");
   else if(k==="2") tryBuy("knight");
   else if(k==="3") tryBuy("archer");
@@ -2053,6 +2192,7 @@ addEventListener("keydown", e=>{
   }
   else if(k==="r"){ startBattle(); }
   else if(k==="p" || k==="escape"){
+    if(G.tut.on && !G.overlay){ tutFinish(); e.preventDefault(); return; }
     if(G.overlay==="settings") G.overlay="pause";
     else if(G.overlay==="pause") G.overlay=null;
     else if(G.scene==="play") G.overlay="pause";
@@ -2095,7 +2235,7 @@ function step(now){
     // balance harness stays a pure function of dt.
     if(G.hitstop > 0){ G.hitstop -= dt; }
     else if(G.scene==="title"){ titleAutoPlay(); update(dt); }
-    else if(G.scene==="play"){ for(let i=0;i<G.speed;i++) update(dt); }
+    else if(G.scene==="play"){ tutStep(dt); for(let i=0;i<G.speed;i++) update(dt); }
     else if(G.scene==="result"){ stepFx(dt); }
   }
   render();
@@ -2114,6 +2254,7 @@ window.__bannerline = {
   G, TYPES, spawn, reset, tryBuy, update, SPR, PROP, render, OPT, DIFF,
   setTerrK(v){ TERR_K = v; }, getTerrK(){ return TERR_K; },
   setDiff(v){ OPT.difficulty = v; }, getDiff(){ return DIFF[OPT.difficulty].name; },
+  tutStart, tutStep, tutFinish, TUT,
   sim(seconds, policy){
     reset();
     const dt = 1/30;
