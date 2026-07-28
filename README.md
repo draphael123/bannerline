@@ -94,16 +94,16 @@ The first ever battle is guided — nine steps that gate on what you actually do
 
 A parchment **campaign map** with three nodes shows what's cleared, what's next and what's locked; progress, renown and unlocks persist to `localStorage` automatically.
 
-Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it with **The Quartermaster**:
+Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it with **The Quartermaster**, reached from the map:
 
 | | |
 |---|---|
-| **Mage** — 200 | Blast damage across **every** lane. 38 HP — paper. |
+| **Mage** — 120 | Blast damage across **every** lane. 38 HP — paper. |
 | Reinforced Walls — 3 levels | +90 keep HP each |
 | Deeper Coffers — 3 levels | +9% gold income each |
 | Standing Army — 2 levels | +45 starting gold each |
 
-The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely, which is only meaningful *because* everything else no longer does. It shipped underpowered at 110g/15dmg (it actually made you worse — Warlord 65% → 35%) and was corrected to 100g/21dmg, which puts it ahead: Veteran 76% → 94%.
+The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely, which is only meaningful *because* everything else no longer does. It is priced at exactly one first-clear (120 renown) so it is the reward for finishing battle I — it shipped at 200 and was silently unreachable until battle II. It also shipped underpowered at 110g/15dmg (it actually made you worse — Warlord 65% → 35%) and was corrected to 100g/21dmg, which puts it ahead: Veteran 76% → 94%.
 
 ## Home and bestiary
 

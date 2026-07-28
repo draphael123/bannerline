@@ -2474,7 +2474,10 @@ function shopRows(){
   const rows=[];
   const y0=96, rh=42;
   if(!SAVE.unlocked.mage)
-    rows.push({kind:"unit", key:"mage", name:"MAGE", cost:200,
+    // Priced to be exactly affordable on the first clear (120 renown) - the
+    // mage is meant to be the reward for finishing battle I, and at 200 it
+    // silently wasn't reachable until battle II.
+    rows.push({kind:"unit", key:"mage", name:"MAGE", cost:120,
                desc:"Blast damage across EVERY lane. Extremely fragile."});
   UPGRADES.forEach(u=>{
     const l=upLvl(u.key);
