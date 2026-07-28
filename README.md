@@ -21,9 +21,13 @@ A 2D pixel-art **lane pusher** — not tower defense. Knights of a river keep ag
 SPEAR ──beats──▶ KNIGHT ──beats──▶ ARCHER ──beats──▶ SPEAR
 ```
 
-- **Spearman — 30g.** Cheap, fast, fragile. Braced spears gut armour.
-- **Knight — 60g.** A wall: 300 HP, low damage. Holds frontage, doesn't farm swarms.
-- **Archer — 90g.** Ranged, frail. Holds at firing range and needs a line in front of it.
+- **Spearman — 6g.** Cheap, fast, fragile. Braced spears gut armour.
+- **Knight — 12g.** A wall: 300 HP, low damage. Holds frontage, doesn't farm swarms.
+- **Archer — 18g.** Ranged, frail. Holds at firing range and needs a line in front of it.
+
+Battle gold is normalized to a **48g cap**. Income, starting gold and unit
+prices are one-fifth of the original display values; purchase timing is
+unchanged.
 
 Battles run 3 minutes. If nobody's keep falls, whoever holds more keep HP wins.
 
@@ -35,7 +39,10 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 **Units move 2.4× while behind their own front line.** Without this, a forward front line means *your* reinforcements walk further while theirs walk less — so pushing was punished and turtling was optimal. Fatal for a game about taking territory.
 
-**Territory pays income.** Each banner you hold raises your gold rate (`TERR_K`, anchored so the starting 3-banner split is exactly 1.0×). Before this, banners were pure decoration and two even economies ground to a 180-second timeout **75% of the time** — measured, 21-sample mirror. Tying income to ground held turns a positional lead into an economic one, so leads convert instead of stalling. Stalemates went from 16/21 to 0/21.
+**Territory pays and rallies.** Each banner you hold raises your gold rate
+(`TERR_K`, anchored so the starting 3-banner split is exactly 1.0×). Capturing
+one immediately pays 2g, and friendly troops within its visible rally ring move
+and fight 10% faster. Animated coins make the continuing income visible.
 
 **Ranged units hold at range and never retreat.** They stop advancing once a target is in reach. An earlier version had them walk backwards to avoid melee, which made your own line appear to rout — stopping is the fix, retreating never was. They also do 0.30× damage to keeps, so archers alone can't siege.
 
@@ -58,7 +65,11 @@ Levels differ by more than scenery, which was the actual reason they felt samey:
 - **Objective** — `raze` their keep, `hold` five flags for eighteen seconds, or `survive` seventy seconds against a keep you cannot break.
 - **Terrain** — marsh or a frozen river closing lanes, enforced for both sides.
 - **Composition** — the horde fields a swarm, a heavy column, or a shaman line.
-- **Boss** — every battle after the first has one. The **Chieftain** (500 HP) and the **Warchief** (1050 HP) are both `heavy`, so massed spears bring them down.
+- **Enemy roster** — Runners punish open lanes, Shield Bearers absorb arrows,
+  and Fire Bombers punish tightly packed troops after the opening levels.
+- **Boss** — each world ends with a no-castle boss battle: the
+  **Overchieftain** calls guards, the airborne **White Terror** changes lanes,
+  and the **Ash Tyrant** periodically burns troops around it.
 
 ## Lanes
 
@@ -114,9 +125,11 @@ Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it wit
 | **Boiling Oil** — 2 levels | Burns whatever reaches your gate |
 | Reinforced Walls — 3 levels | +90 keep HP each |
 | Deeper Coffers — 3 levels | +9% gold income each |
-| Standing Army — 2 levels | +45 starting gold each |
+| Standing Army — 2 levels | +9 starting gold each |
 
-The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely, which is only meaningful *because* everything else no longer does. It is priced at exactly one first-clear (120 renown) so it is the reward for finishing battle I — it shipped at 200 and was silently unreachable until battle II. It also shipped underpowered at 110g/15dmg (it actually made you worse — Warlord 65% → 35%) and was corrected to 100g/21dmg, which puts it ahead: Veteran 76% → 94%.
+The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely,
+which is only meaningful *because* everything else no longer does. It costs
+120 renown to unlock and 20g to deploy.
 
 ## Home and bestiary
 
@@ -130,21 +143,12 @@ Before the cap, more units on the bar was strictly better, so the optimal play w
 
 The **Outrider** and **Sapper** exist because the other four all fight *the line*. Nothing changed **how** you win. One bypasses the fight; one exists to break walls. Measured: an outrider runs clean past a Knight blocking its lane, and a sapper does 2.3× a spearman's damage to a keep while doing barely a sixth of its damage to troops.
 
-## Heroes
+## Retired hero system
 
-Once you buy one from the **Heroes** tab of the store, a hero marches in every battle for free. It fights on its own, and:
-
-- **It walks to whichever lane you've selected.** One input does both jobs, it needs no extra controls (so it works on touch), and because it *walks*, switching lanes leaves it out of position for about a second — lane commitment still costs something.
-- **One ability** on a cooldown — `Space` or the button bottom-left.
-- **Death is a timed respawn** at your keep, not a permanent loss. A 60-second battle can't carry permadeath.
-
-The first hero is the **Standard-Bearer**: tanky, modest damage, and RALLY hastens and strengthens the troops around him. It's deliberately an *anchor* rather than a carry — a duelist hero would turn your army into an escort, which is the failure mode worth avoiding.
-
-**Pricing the hero.** A free permanent respawning body you can steer to the losing lane is worth a lot, and four separate levers barely touched it: three rounds of stat nerfs, adding bosses, and teaching the AI to counter-buy spears (heroes are `heavy`, which skirmishers already punish 3.2×). Bosses in particular made hero-less play *harder* without touching the hero — the hero counters bosses, not the reverse.
-
-What finally scaled with the problem was pricing it directly: **the horde musters ~18% harder when a champion rides against them.**
-
-⚠️ The hero is still an advantage at the top tiers, and the exact multiplier is tuned on a crude bot that uses a hero far worse than a person would. This one needs a playtest, not more simulation.
+Permanent, free, respawning heroes were removed because they added a separate
+balance axis that unit prices could not control. Existing saves automatically
+retire an owned hero. The Standard-Bearer art and unit definition remain in the
+source so it can return later as an expensive, mortal warband unit.
 
 ## Settings
 
@@ -160,7 +164,11 @@ The pause menu offers Resume / Settings / Restart / Quit to title.
 
 ## Art direction
 
-Two **factions**, not a palette swap: blue-and-steel humans versus a green goblin horde — spear skirmishers with lashed flint, a hulking brute with a bone club and plank shield, and a hooded shaman carrying a burning skull-staff. The player defends a crenellated stone keep; the goblins hold a sharpened-log palisade crowned with a skull totem. Two silhouettes beat one silhouette in two colours for readability in a crowd.
+Two **factions**, not a palette swap: blue-and-steel humans versus a green
+goblin horde. The expanded horde adds distinct runner, shield-bearer and bomber
+silhouettes, plus three oversized world bosses. Battlefields now carry
+world-specific structures—war camps, ice spires and a living caldera—rather
+than relying on palette changes alone.
 
 **Depth by rank.** Back rows draw ~14% smaller from pre-dimmed sprite variants, front rows at full size and contrast. Without it a twenty-unit scrum reads as a flat sticker sheet.
 
@@ -186,7 +194,7 @@ Two **factions**, not a palette swap: blue-and-steel humans versus a green gobli
 
 ## The campaign curve
 
-Each level carries a `pressure` scalar that sits *underneath* the global difficulty tier, so later levels are harder than earlier ones whichever tier you picked. And the horde scales with your **empire** — `hordeResponse()` counts your hero, your unlocked units and every upgrade level, and musters accordingly.
+Each level carries a `pressure` scalar that sits *underneath* the global difficulty tier, so later levels are harder than earlier ones whichever tier you picked. The horde also scales with unlocked units and upgrade levels.
 
 ⚠️ Both of those exist because measurement found the opposite of what I'd assumed:
 
@@ -200,7 +208,7 @@ Each level carries a `pressure` scalar that sits *underneath* the global difficu
 Balance is tested headlessly, not eyeballed. In the console:
 
 ```js
-__bannerline.sim(190, (G, buy) => { if (G.gold >= 30) buy("spear"); })
+__bannerline.sim(190, (G, buy) => { if (G.gold >= 6) buy("spear"); })
 ```
 
 **Benchmark honestly.** The AI has counter logic *and* banks gold for the right unit, so a naive "random mix" policy losing to it proves nothing. The real fairness test is a player policy running the AI's *exact* algorithm — that should sit near 50%.
@@ -242,9 +250,9 @@ python -m http.server 5784
 ## Status
 
 The current prototype includes a persistent twelve-battle campaign across three
-worlds, a campaign map, warband selection, a bestiary, unlockable units,
-upgrades, heroes, four difficulty tiers, and desktop and landscape-mobile
-controls.
+worlds, dedicated world bosses, an expanded enemy roster, a campaign map,
+warband selection, a bestiary, unlockable units, upgrades, four difficulty
+tiers, and desktop and landscape-mobile controls.
 
 The next development phase should focus on maintainability and confidence:
 
@@ -253,4 +261,5 @@ The next development phase should focus on maintainability and confidence:
 - turn the existing balance harness into repeatable automated checks;
 - add browser smoke tests for the title, campaign, shop, warband, battle, and
   save/load flows;
-- playtest hero balance and iterate on the pixel art with human feedback.
+- rebalance all twelve levels against the expanded enemy roster;
+- iterate on the new boss and enemy sprites with human feedback.
