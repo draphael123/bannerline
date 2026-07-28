@@ -104,6 +104,10 @@ Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it wit
 | | |
 |---|---|
 | **Mage** — 120 | Blast damage across **every** lane. 38 HP — paper. |
+| **Outrider** — 150 | Sprints past the fight entirely and runs at their keep. Send it down an empty lane. |
+| **Sapper** — 180 | Feeble against troops, tears walls apart. Escort it. |
+| **Keep Ballista** — 3 levels | Your keep shoots back, every 8s down to 6s |
+| **Boiling Oil** — 2 levels | Burns whatever reaches your gate |
 | Reinforced Walls — 3 levels | +90 keep HP each |
 | Deeper Coffers — 3 levels | +9% gold income each |
 | Standing Army — 2 levels | +45 starting gold each |
@@ -113,6 +117,14 @@ The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely, wh
 ## Home and bestiary
 
 The home screen is a **menu**, not a match already in progress — a static scene of the two keeps facing each other, with Campaign / Bestiary / Settings and the difficulty picker. The unit glossary lives in the **Bestiary**, which lists both armies with stats and counters, and greys out what you haven't unlocked.
+
+## Your warband
+
+You own units; you **march with five**. Chosen before a battle on the Warband screen.
+
+Before the cap, more units on the bar was strictly better, so the optimal play was "buy everything, always" and unlocks were a growing shopping list rather than a decision. Five forces a composition — and it keeps the HUD readable, which six cards would not.
+
+The **Outrider** and **Sapper** exist because the other four all fight *the line*. Nothing changed **how** you win. One bypasses the fight; one exists to break walls. Measured: an outrider runs clean past a Knight blocking its lane, and a sapper does 2.3× a spearman's damage to a keep while doing barely a sixth of its damage to troops.
 
 ## Heroes
 
