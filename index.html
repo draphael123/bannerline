@@ -59,7 +59,8 @@ const P = {
 //////////////////////////////////////////////////////////////////////////////
 let AC = null, MASTER = null;
 // Player options. Persisted to localStorage so they survive a reload.
-const OPT = { music:0.7, sfx:0.8, shake:true, dmgNums:true, fastDefault:false };
+const OPT = { music:0.7, sfx:0.8, shake:true, dmgNums:true, fastDefault:false,
+              difficulty:1 };
 try{
   const raw = localStorage.getItem("bannerline.opt");
   if(raw) Object.assign(OPT, JSON.parse(raw));
@@ -180,204 +181,256 @@ function colsFor(side){
   return side>0 ? {m:P.blue, d:P.blueD, l:P.blueL} : {m:P.red, d:P.redD, l:P.redL};
 }
 
-function artSpear(c, K, frame){
-  const atk = frame===2, sw = frame===1 ? 1 : 0;
-  // legs
-  R(c, 7, 30+sw, 4, 9-sw, K.d); R(c, 12, 30+(1-sw), 4, 9-(1-sw), K.d);
-  R(c, 6, 37, 6, 2, P.woodD);   R(c, 12, 37, 6, 2, P.woodD);
-  // tunic
-  R(c, 6, 17, 11, 14, K.m);
-  R(c, 6, 17, 11, 3, K.l);
-  R(c, 6, 27, 11, 3, K.d);
-  // arms
-  R(c, 4, 20, 3, 8, K.m);
-  R(c, 16, atk?19:20, 3, 7, K.m);
-  // head
-  R(c, 7, 8, 9, 9, P.skin);
-  R(c, 7, 15, 9, 2, P.skinD);
-  R(c, 6, 5, 11, 5, K.d);              // cap
-  R(c, 6, 9, 11, 2, K.m);
-  R(c, 12, 11, 2, 2, P.ink);           // eye
-  // spear
-  if(atk){
-    R(c, 12, 21, 14, 2, P.wood);
-    R(c, 25, 20, 4, 4, P.steel);
-    R(c, 26, 21, 2, 2, P.steelD);
-  } else {
-    R(c, 17, 2, 2, 32, P.wood);
-    R(c, 16, 0, 4, 5, P.steel);
-    R(c, 17, 1, 2, 3, P.steelD);
-  }
-}
-function artKnight(c, K, frame){
-  const atk = frame===2, sw = frame===1 ? 1 : 0;
-  // shifted down 6px (box is 6 taller) so the plume has headroom to bake
-  c.save(); c.translate(0, 6);
-  // legs
-  R(c, 8, 32+sw, 5, 8-sw, P.steelD); R(c, 14, 32+(1-sw), 5, 8-(1-sw), P.steelD);
-  R(c, 7, 38, 7, 2, P.ink); R(c, 14, 38, 7, 2, P.ink);
-  // body
-  R(c, 5, 16, 17, 17, K.m);
-  R(c, 5, 16, 17, 3, K.l);
-  R(c, 5, 28, 17, 3, K.d);
-  R(c, 11, 19, 5, 9, K.l);            // tabard stripe
-  // helm
-  R(c, 8, 4, 12, 12, P.steel);
-  R(c, 8, 4, 12, 3, P.steelD);
-  R(c, 8, 13, 12, 3, P.steelD);
-  R(c, 11, 8, 8, 3, P.ink);           // visor
-  R(c, 10, -2, 7, 7, K.l);            // plume
-  R(c, 12, -5, 3, 4, K.m);
-  // shield (left / back)
-  R(c, 2, 17, 6, 15, K.d);
-  R(c, 3, 19, 4, 11, K.l);
-  R(c, 4, 22, 2, 5, K.d);
-  // sword
-  if(atk){
-    R(c, 19, 14, 3, 16, P.steel);
-    R(c, 20, 16, 1, 12, P.steelD);
-    R(c, 17, 28, 8, 2, P.gold);
-  } else {
-    R(c, 21, 8, 3, 20, P.steel);
-    R(c, 22, 10, 1, 16, P.steelD);
-    R(c, 19, 27, 7, 2, P.gold);
-    R(c, 21, 29, 3, 4, P.woodD);
-  }
-  c.restore();
-}
-function artArcher(c, K, frame){
-  const atk = frame===2, sw = frame===1 ? 1 : 0;
-  R(c, 7, 30+sw, 4, 9-sw, K.d); R(c, 12, 30+(1-sw), 4, 9-(1-sw), K.d);
-  R(c, 6, 37, 6, 2, P.woodD); R(c, 12, 37, 6, 2, P.woodD);
-  // cloak + body
-  R(c, 5, 16, 12, 15, K.m);
-  R(c, 5, 16, 12, 3, K.l);
-  R(c, 5, 27, 12, 3, K.d);
-  R(c, 3, 18, 3, 12, K.d);            // cloak tail
-  // hood
-  R(c, 5, 5, 13, 12, K.d);
-  R(c, 7, 9, 8, 6, P.skin);
-  R(c, 12, 11, 2, 2, P.ink);
-  R(c, 5, 15, 13, 2, K.m);
-  // bow + arm
-  R(c, 16, 20, 3, 6, K.m);
-  const bx = atk ? 22 : 20;
-  R(c, bx, 8, 2, 22, P.wood);
-  R(c, bx-2, 6, 2, 4, P.wood);
-  R(c, bx-2, 28, 2, 4, P.wood);
-  R(c, bx-3, 9, 1, 21, P.bone);       // string
-  if(atk){ R(c, 12, 18, 11, 2, P.wood); R(c, 22, 17, 3, 3, P.steel); }
-}
+// A 4-beat gait (contact / passing / contact / passing) instead of a 2-frame
+// shuffle: [front leg dy, back leg dy, body bob, arm swing]
+const GAIT = [ [0,3,0,1], [2,1,-1,0], [3,0,0,-1], [1,2,-1,0] ];
+const FRAMES = 5;                                  // 0-3 walk, 4 attack
 
-// ---- the goblin horde -----------------------------------------------------
-// The enemy is a different SPECIES, not a palette swap. Two silhouettes on the
-// field beats one silhouette in two colours for readability at a glance.
+// The goblin horde palette. The enemy is a different SPECIES, not a palette
+// swap — two silhouettes beat one silhouette in two colours in a crowd.
 const GOB = {
   skin:"#7ab84f", skinD:"#4d8130", skinL:"#a3da72",
   rag:"#b0432f", ragD:"#75291b", ragL:"#d46a4e",
   bone:"#f2ecdc", boneD:"#bdb39a",
   fire:"#ffb03a", fireL:"#ffe08a", fireD:"#e05a1c",
 };
-function artGobSpear(c, K, frame){
-  const atk = frame===2, sw = frame===1 ? 1 : 0;
-  // squat, hunched, bandy legs
-  R(c, 7, 28+sw, 4, 8-sw, GOB.skinD); R(c, 12, 28+(1-sw), 4, 8-(1-sw), GOB.skinD);
-  R(c, 6, 35, 6, 2, GOB.ragD); R(c, 12, 35, 6, 2, GOB.ragD);
-  R(c, 6, 18, 11, 11, GOB.skin);            // torso
-  R(c, 6, 18, 11, 2, GOB.skinL);
-  R(c, 6, 25, 11, 4, GOB.rag);              // loincloth
-  R(c, 6, 25, 11, 1, GOB.ragL);
-  R(c, 4, 20, 3, 7, GOB.skin);              // arms
-  R(c, 16, atk?18:19, 3, 6, GOB.skin);
-  // big head + ears
-  R(c, 6, 9, 11, 9, GOB.skin);
-  R(c, 6, 16, 11, 2, GOB.skinD);
-  R(c, 1, 10, 6, 4, GOB.skin);              // left ear
-  R(c, 2, 11, 3, 2, GOB.skinL);
-  R(c, 16, 10, 6, 4, GOB.skin);             // right ear
-  R(c, 18, 11, 3, 2, GOB.skinL);
-  R(c, 12, 12, 3, 3, "#f5e14a");            // eye
-  R(c, 13, 13, 1, 1, K.d);
-  R(c, 8, 12, 3, 2, "#f5e14a");
-  R(c, 9, 16, 2, 2, GOB.bone);              // tusk
-  // crude spear: lashed flint
+
+function artSpear(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  R(c, 7, 30+g[0], 4, 9-g[0], K.d);  R(c, 12, 30+g[1], 4, 9-g[1], K.d);
+  R(c, 6, 37+g[0], 6, 2, P.woodD);   R(c, 12, 37+g[1], 6, 2, P.woodD);
+  R(c, 6, 17+B, 11, 14, K.m);
+  R(c, 6, 17+B, 11, 2, K.l);
+  R(c, 6, 19+B, 2, 12, K.l);
+  R(c, 15, 19+B, 2, 12, K.d);
+  R(c, 6, 28+B, 11, 3, K.d);
+  R(c, 8, 22+B, 7, 4, K.l);
+  R(c, 9, 23+B, 5, 2, K.d);
+  R(c, 4, 20+B+g[3], 3, 8, K.m); R(c, 4, 20+B+g[3], 3, 2, K.l);
+  R(c, 16, (atk?19:20)+B-g[3], 3, 7, K.m);
+  R(c, 7, 8+B, 9, 9, P.skin);
+  R(c, 7, 8+B, 9, 2, "#fbe6bd");
+  R(c, 7, 15+B, 9, 2, P.skinD);
+  R(c, 6, 5+B, 11, 5, K.d);
+  R(c, 6, 5+B, 11, 2, K.m);
+  R(c, 6, 9+B, 11, 2, K.m);
+  R(c, 12, 11+B, 2, 2, P.ink);
+  R(c, 9, 13+B, 3, 1, P.skinD);
   if(atk){
-    R(c, 12, 20, 14, 2, P.wood);
-    R(c, 25, 18, 3, 5, GOB.bone);
-    R(c, 22, 19, 2, 3, GOB.ragD);
+    R(c, 12, 21+B, 15, 2, P.wood);
+    R(c, 12, 21+B, 15, 1, "#b8834f");
+    R(c, 26, 19+B, 3, 5, P.steelD);
+    R(c, 26, 20+B, 2, 3, P.steel);
   } else {
-    R(c, 17, 3, 2, 30, P.wood);
-    R(c, 16, 0, 4, 6, GOB.bone);
-    R(c, 16, 5, 4, 2, GOB.ragD);
+    R(c, 17, 2+B, 2, 32, P.wood);
+    R(c, 17, 2+B, 1, 32, "#b8834f");
+    R(c, 17, 0+B, 3, 6, P.steelD);
+    R(c, 17, 1+B, 2, 4, P.steel);
+    R(c, 16, 7+B, 4, 2, K.d);
   }
 }
-function artGobBrute(c, K, frame){
-  const atk = frame===2, sw = frame===1 ? 1 : 0;
-  c.save(); c.translate(0, 4);
-  // heavy legs
-  R(c, 8, 30+sw, 7, 10-sw, GOB.skinD); R(c, 17, 30+(1-sw), 7, 10-(1-sw), GOB.skinD);
-  R(c, 7, 38, 9, 3, GOB.ragD); R(c, 16, 38, 9, 3, GOB.ragD);
-  // huge hunched torso
-  R(c, 5, 12, 22, 19, GOB.skin);
-  R(c, 5, 12, 22, 3, GOB.skinL);
-  R(c, 5, 26, 22, 5, GOB.rag);
-  R(c, 5, 26, 22, 1, GOB.ragL);
-  R(c, 9, 16, 6, 8, GOB.skinD);             // belly shading
-  // slab shoulders
-  R(c, 2, 11, 7, 9, GOB.skinD);
-  R(c, 23, 11, 7, 9, GOB.skinD);
-  R(c, 3, 12, 4, 3, GOB.skinL);
-  // small mean head sunk between shoulders
-  R(c, 11, 3, 11, 10, GOB.skin);
-  R(c, 11, 11, 11, 2, GOB.skinD);
-  R(c, 12, 0, 9, 4, GOB.ragD);              // headband
-  R(c, 17, 6, 3, 3, "#ff5a3a");
-  R(c, 13, 6, 3, 3, "#ff5a3a");
-  R(c, 13, 10, 2, 3, GOB.bone);             // tusks
-  R(c, 18, 10, 2, 3, GOB.bone);
-  // plank shield
-  const shx = 0;
-  R(c, shx, 14, 6, 18, P.wood);
-  R(c, shx, 14, 6, 2, "#b8834f");
-  R(c, shx+1, 20, 4, 2, P.woodD);
-  R(c, shx, 26, 6, 2, P.woodD);
-  // bone club
+
+function artKnight(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  c.save(); c.translate(0, 6);
+  R(c, 8, 32+g[0], 5, 8-g[0], P.steelD); R(c, 14, 32+g[1], 5, 8-g[1], P.steelD);
+  R(c, 8, 32+g[0], 2, 8-g[0], P.steel);
+  R(c, 7, 38+g[0], 7, 2, P.ink);         R(c, 14, 38+g[1], 7, 2, P.ink);
+  R(c, 5, 16+B, 17, 17, K.m);
+  R(c, 5, 16+B, 17, 3, K.l);
+  R(c, 5, 18+B, 2, 15, K.l);
+  R(c, 20, 18+B, 2, 15, K.d);
+  R(c, 5, 28+B, 17, 3, K.d);
+  R(c, 11, 19+B, 5, 10, K.l);
+  R(c, 12, 21+B, 3, 5, P.gold);
+  R(c, 3, 15+B, 5, 6, P.steel); R(c, 3, 15+B, 5, 2, "#e8edf5");
+  R(c, 19, 15+B, 5, 6, P.steel);
+  R(c, 8, 4+B, 12, 12, P.steel);
+  R(c, 8, 4+B, 12, 2, "#e8edf5");
+  R(c, 8, 6+B, 2, 10, "#e8edf5");
+  R(c, 18, 6+B, 2, 10, P.steelD);
+  R(c, 8, 13+B, 12, 3, P.steelD);
+  R(c, 11, 8+B, 8, 3, P.ink);
+  R(c, 11, 11+B, 8, 1, P.steelD);
+  R(c, 12, -5+B, 4, 10, "#c4392e");            // red crest
+  R(c, 13, -5+B, 2, 8, "#ef6a52");
+  R(c, 11, 2+B, 6, 3, "#8e241c");
+  R(c, 1, 17+B, 7, 16, K.d);
+  R(c, 1, 17+B, 7, 2, K.m);
+  R(c, 2, 20+B, 5, 11, K.l);
+  R(c, 3, 23+B, 3, 6, K.d);
   if(atk){
-    R(c, 24, 8, 4, 14, P.wood);
-    R(c, 22, 2, 9, 8, GOB.bone);
-    R(c, 24, 4, 5, 4, GOB.boneD);
+    R(c, 20, 12+B, 3, 18, P.steel); R(c, 21, 14+B, 1, 14, "#e8edf5");
+    R(c, 18, 28+B, 8, 2, P.gold);
   } else {
-    R(c, 27, 10, 4, 16, P.wood);
-    R(c, 25, 2, 9, 9, GOB.bone);
-    R(c, 27, 4, 5, 5, GOB.boneD);
+    R(c, 22, 6+B, 3, 22, P.steel);  R(c, 23, 8+B, 1, 18, "#e8edf5");
+    R(c, 20, 27+B, 7, 2, P.gold);
+    R(c, 22, 29+B, 3, 4, P.woodD);
   }
   c.restore();
 }
+
+function artArcher(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  R(c, 7, 30+g[0], 4, 9-g[0], K.d); R(c, 12, 30+g[1], 4, 9-g[1], K.d);
+  R(c, 6, 37+g[0], 6, 2, P.woodD);  R(c, 12, 37+g[1], 6, 2, P.woodD);
+  R(c, 5, 16+B, 12, 15, K.m);
+  R(c, 5, 16+B, 12, 2, K.l);
+  R(c, 5, 18+B, 2, 13, K.l);
+  R(c, 15, 18+B, 2, 13, K.d);
+  R(c, 5, 28+B, 12, 3, K.d);
+  R(c, 2, 18+B, 3, 13, K.d);
+  R(c, 8, 20+B, 3, 8, K.d);
+  R(c, 5, 5+B, 13, 12, K.d);
+  R(c, 5, 5+B, 13, 2, K.m);
+  R(c, 7, 9+B, 8, 6, P.skin);
+  R(c, 7, 9+B, 8, 1, "#fbe6bd");
+  R(c, 12, 11+B, 2, 2, P.ink);
+  R(c, 5, 15+B, 13, 2, K.m);
+  R(c, 1, 14+B, 4, 9, P.woodD);
+  R(c, 2, 11+B, 1, 4, P.bone); R(c, 4, 10+B, 1, 5, P.bone);
+  R(c, 16, 20+B, 3, 6, K.m);
+  const bx = atk ? 22 : 20;
+  R(c, bx, 8+B, 2, 22, P.wood);
+  R(c, bx, 8+B, 1, 22, "#b8834f");
+  R(c, bx-2, 6+B, 2, 4, P.wood);
+  R(c, bx-2, 28+B, 2, 4, P.wood);
+  R(c, bx-3, 9+B, 1, 21, P.bone);
+  if(atk){ R(c, 12, 18+B, 12, 2, P.wood); R(c, 23, 17+B, 3, 3, P.steel); }
+}
+
+function artGobSpear(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  R(c, 7, 28+g[0], 4, 8-g[0], GOB.skinD); R(c, 12, 28+g[1], 4, 8-g[1], GOB.skinD);
+  R(c, 6, 34+g[0], 6, 2, GOB.ragD);       R(c, 12, 34+g[1], 6, 2, GOB.ragD);
+  R(c, 6, 18+B, 11, 11, GOB.skin);
+  R(c, 6, 18+B, 11, 2, GOB.skinL);
+  R(c, 6, 20+B, 2, 9, GOB.skinL);
+  R(c, 15, 20+B, 2, 9, GOB.skinD);
+  R(c, 6, 24+B, 11, 4, GOB.rag);
+  R(c, 6, 24+B, 11, 1, GOB.ragL);
+  R(c, 8, 21+B, 5, 2, GOB.skinD);
+  R(c, 4, 20+B+g[3], 3, 7, GOB.skin);
+  R(c, 16, (atk?18:19)+B-g[3], 3, 6, GOB.skin);
+  R(c, 6, 9+B, 11, 9, GOB.skin);
+  R(c, 6, 9+B, 11, 2, GOB.skinL);
+  R(c, 6, 16+B, 11, 2, GOB.skinD);
+  R(c, 0, 9+B, 7, 5, GOB.skin);
+  R(c, 1, 10+B, 4, 2, GOB.skinL);
+  R(c, 0, 13+B, 7, 1, GOB.skinD);
+  R(c, 16, 9+B, 7, 5, GOB.skin);
+  R(c, 18, 10+B, 4, 2, GOB.skinL);
+  R(c, 12, 12+B, 3, 3, "#f5e14a");
+  R(c, 13, 13+B, 1, 1, P.ink);
+  R(c, 8, 12+B, 3, 3, "#f5e14a");
+  R(c, 9, 13+B, 1, 1, P.ink);
+  R(c, 9, 16+B, 2, 2, GOB.bone);
+  R(c, 13, 16+B, 2, 2, GOB.bone);
+  if(atk){
+    R(c, 12, 20+B, 15, 2, P.wood);
+    R(c, 26, 18+B, 3, 5, GOB.boneD);
+    R(c, 26, 19+B, 2, 3, GOB.bone);
+    R(c, 23, 19+B, 2, 3, GOB.ragD);
+  } else {
+    R(c, 17, 3+B, 2, 30, P.wood);
+    R(c, 17, 3+B, 1, 30, "#b8834f");
+    R(c, 17, 0+B, 3, 6, GOB.boneD);
+    R(c, 17, 1+B, 2, 4, GOB.bone);
+    R(c, 16, 6+B, 4, 2, GOB.ragD);
+  }
+}
+
+function artGobBrute(c, K, frame){
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  c.save(); c.translate(0, 4);
+  R(c, 8, 30+g[0], 7, 10-g[0], GOB.skinD); R(c, 17, 30+g[1], 7, 10-g[1], GOB.skinD);
+  R(c, 8, 30+g[0], 2, 10-g[0], GOB.skin);
+  R(c, 7, 38+g[0], 9, 3, GOB.ragD);        R(c, 16, 38+g[1], 9, 3, GOB.ragD);
+  R(c, 5, 12+B, 22, 19, GOB.skin);
+  R(c, 5, 12+B, 22, 3, GOB.skinL);
+  R(c, 5, 15+B, 2, 16, GOB.skinL);
+  R(c, 25, 15+B, 2, 16, GOB.skinD);
+  R(c, 5, 26+B, 22, 5, GOB.rag);
+  R(c, 5, 26+B, 22, 1, GOB.ragL);
+  R(c, 9, 16+B, 7, 9, GOB.skinD);
+  R(c, 10, 17+B, 5, 2, GOB.skin);
+  R(c, 2, 10+B, 8, 10, GOB.skinD);
+  R(c, 3, 11+B, 5, 3, GOB.skinL);
+  R(c, 22, 10+B, 8, 10, GOB.skinD);
+  R(c, 23, 11+B, 5, 3, GOB.skin);
+  R(c, 11, 3+B, 11, 10, GOB.skin);
+  R(c, 11, 3+B, 11, 2, GOB.skinL);
+  R(c, 11, 11+B, 11, 2, GOB.skinD);
+  R(c, 12, 0+B, 9, 4, GOB.ragD);
+  R(c, 12, 0+B, 9, 1, GOB.rag);
+  R(c, 17, 6+B, 3, 3, "#ff5a3a"); R(c, 13, 6+B, 3, 3, "#ff5a3a");
+  R(c, 13, 10+B, 2, 3, GOB.bone); R(c, 18, 10+B, 2, 3, GOB.bone);
+  R(c, 0, 14+B, 7, 19, P.wood);
+  R(c, 0, 14+B, 7, 2, "#b8834f");
+  R(c, 1, 20+B, 5, 2, P.woodD);
+  R(c, 0, 27+B, 7, 2, P.woodD);
+  R(c, 2, 17+B, 2, 13, "#b8834f");
+  if(atk){
+    R(c, 24, 10+B, 4, 14, P.wood);
+    R(c, 22, 3+B, 8, 9, GOB.boneD);
+    R(c, 23, 4+B, 6, 6, GOB.bone);
+    R(c, 24, 6+B, 3, 3, GOB.boneD);
+  } else {
+    R(c, 27, 12+B, 4, 16, P.wood);
+    R(c, 25, 4+B, 8, 10, GOB.boneD);
+    R(c, 26, 5+B, 6, 7, GOB.bone);
+    R(c, 27, 7+B, 3, 3, GOB.boneD);
+  }
+  c.restore();
+}
+
 function artGobShaman(c, K, frame){
-  const atk = frame===2, sw = frame===1 ? 1 : 0;
-  R(c, 8, 28+sw, 4, 8-sw, GOB.skinD); R(c, 13, 28+(1-sw), 4, 8-(1-sw), GOB.skinD);
-  R(c, 7, 35, 6, 2, GOB.ragD); R(c, 13, 35, 6, 2, GOB.ragD);
-  // robe
-  R(c, 5, 15, 14, 15, GOB.rag);
-  R(c, 5, 15, 14, 3, GOB.ragL);
-  R(c, 5, 26, 14, 3, GOB.ragD);
-  R(c, 3, 17, 3, 12, GOB.ragD);
-  // hood + snout
-  R(c, 5, 4, 15, 12, GOB.ragD);
-  R(c, 8, 8, 8, 6, GOB.skin);
-  R(c, 13, 10, 3, 2, "#f5e14a");
-  R(c, 9, 13, 2, 2, GOB.bone);
-  R(c, 5, 14, 15, 2, GOB.rag);
-  // bone necklace
-  R(c, 8, 16, 2, 3, GOB.bone); R(c, 12, 17, 2, 3, GOB.bone);
-  // staff topped with a burning skull
-  const stx = atk ? 22 : 20;
-  R(c, stx, 6, 3, 26, P.wood);
-  R(c, stx-2, 0, 7, 7, GOB.bone);
-  R(c, stx-1, 2, 2, 2, K.d); R(c, stx+2, 2, 2, 2, K.d);
-  R(c, stx-1, -3, 5, 3, GOB.fire);
-  R(c, stx, -5, 3, 3, GOB.fireL);
-  if(atk){ R(c, stx-6, 14, 5, 5, GOB.fire); R(c, stx-5, 15, 3, 3, GOB.fireL); }
+  const atk = frame===4, g = GAIT[atk?0:frame];
+  const B = atk ? 0 : g[2];
+  // Silhouette cues: a HUNCHED back and a tall crooked staff whose burning
+  // skull clears the head-line. It read as a red-green blob before.
+  R(c, 8, 28+g[0], 4, 8-g[0], GOB.skinD); R(c, 13, 28+g[1], 4, 8-g[1], GOB.skinD);
+  R(c, 7, 34+g[0], 6, 2, GOB.ragD);       R(c, 13, 34+g[1], 6, 2, GOB.ragD);
+  R(c, 5, 15+B, 14, 15, GOB.rag);
+  R(c, 5, 15+B, 14, 2, GOB.ragL);
+  R(c, 5, 17+B, 2, 13, GOB.ragL);
+  R(c, 17, 17+B, 2, 13, GOB.ragD);
+  R(c, 5, 26+B, 14, 3, GOB.ragD);
+  R(c, 3, 17+B, 3, 12, GOB.ragD);
+  R(c, 4, 29+B, 4, 3, GOB.rag);  R(c, 10, 29+B, 4, 4, GOB.rag);
+  R(c, 15, 29+B, 4, 3, GOB.rag);              // ragged hem
+  R(c, 5, 21+B, 14, 2, GOB.ragD);             // sash
+  R(c, 4, 9+B, 9, 8, GOB.ragD);
+  R(c, 4, 9+B, 9, 2, GOB.rag);
+  R(c, 3, 12+B, 3, 6, GOB.ragD);
+  R(c, 8, 6+B, 13, 11, GOB.ragD);
+  R(c, 8, 6+B, 13, 2, GOB.rag);
+  R(c, 12, 10+B, 9, 6, GOB.skin);
+  R(c, 12, 10+B, 9, 1, GOB.skinL);
+  R(c, 18, 12+B, 3, 2, "#f5e14a");
+  R(c, 14, 15+B, 2, 2, GOB.bone);
+  R(c, 8, 15+B, 13, 2, GOB.rag);
+  R(c, 7, 18+B, 2, 4, GOB.bone); R(c, 11, 19+B, 2, 4, GOB.bone);
+  R(c, 15, 18+B, 2, 3, GOB.bone);
+  const stx = atk ? 23 : 21;
+  R(c, stx, 10+B, 3, 24, P.wood);
+  R(c, stx, 10+B, 1, 24, "#b8834f");
+  R(c, stx-1, 6+B, 3, 5, P.wood);
+  R(c, stx-2, 1+B, 7, 8, GOB.boneD);
+  R(c, stx-1, 2+B, 5, 5, GOB.bone);
+  R(c, stx-1, 3+B, 2, 2, P.ink); R(c, stx+2, 3+B, 2, 2, P.ink);
+  R(c, stx, 7+B, 3, 2, GOB.boneD);
+  R(c, stx-1, -3+B, 5, 5, GOB.fire);
+  R(c, stx, -6+B, 3, 4, GOB.fireL);
+  if(atk){
+    R(c, stx-8, 16+B, 6, 6, GOB.fire);
+    R(c, stx-7, 17+B, 4, 4, GOB.fireL);
+  }
 }
 
 const UNIT_ART = {
@@ -386,7 +439,7 @@ const UNIT_ART = {
 };
 const UNIT_BOX = {
   "1":  { spear:{w:30,h:40}, knight:{w:27,h:47}, archer:{w:26,h:40} },
-  "-1": { spear:{w:30,h:38}, knight:{w:36,h:46}, archer:{w:30,h:42} },
+  "-1": { spear:{w:30,h:38}, knight:{w:36,h:47}, archer:{w:30,h:48} },
 };
 const SPR = {};                               // SPR[type][side][frame] / .flash
 function bakeUnits(){
@@ -396,7 +449,7 @@ function bakeUnits(){
       const K = colsFor(side), art = UNIT_ART[side][type], box = UNIT_BOX[side][type];
       const flip = side < 0;                  // all art drawn facing right
       const frames = [], flashes = [], far = [];
-      for(let f=0; f<3; f++){
+      for(let f=0; f<FRAMES; f++){
         frames.push (bake(box.w, box.h, c=>art(c,K,f), flip));
         flashes.push(bake(box.w, box.h, c=>art(c,K,f), flip, "#ffffff"));
         // pre-dimmed copy for the back ranks — cheaper and crisper than
@@ -629,8 +682,22 @@ const TYPES = {
 };
 const ORDER = ["spear","knight","archer"];
 
+// Difficulty scales the AI's GENERALSHIP and purse, never unit stats — you
+// should be beating a better commander, not smaller numbers. `income` is the
+// enemy's gold multiplier, `cd` its decision interval, `counterAt` how few of
+// your units it takes to trigger a counter-buy, `laneIQ` how smartly it picks
+// a lane (0 random, 1 least-crowded, 2 tactical).
+const DIFF = [
+  { name:"RECRUIT",  income:0.80, cd:0.34, counterAt:3, laneIQ:0 },
+  { name:"SOLDIER",  income:1.00, cd:0.20, counterAt:2, laneIQ:1 },
+  { name:"VETERAN",  income:1.12, cd:0.14, counterAt:2, laneIQ:2 },
+  { name:"WARLORD",  income:1.26, cd:0.10, counterAt:1, laneIQ:2 },
+];
+function diff(){ return DIFF[Math.max(0, Math.min(3, OPT.difficulty))]; }
+
 const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false,
+  lane:2, laneFlash:0,
   t:0, over:null, speed:1, paused:false,
   gold:60, goldMax:240,
   eGold:60, eBrainCd:0,
@@ -654,6 +721,7 @@ function reset(){
   G.dying=[]; G.slashes=[]; G.stuck=[];
   G.keepP={hp:400,max:400,x:-4}; G.keepE={hp:400,max:400,x:104};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
+  G.lane=2; G.laneFlash=0;
   G.shake=0; G.flash=0; G.hitstop=0; G.toast=null; G.toastT=0;
   G.stats={sent:0, spent:0, kills:0, maxFront:50};
   resetBanners();
@@ -699,7 +767,8 @@ function tryBuy(typeKey){
   const T = TYPES[typeKey];
   if(G.gold < T.cost){ tone(130,0.10,"square",0.03,0.6); return false; }
   G.gold -= T.cost;
-  spawn(typeKey, 1);
+  spawn(typeKey, 1, G.lane);        // deploy into the CHOSEN lane
+  G.laneFlash = 1;
   G.stats.sent++; G.stats.spent += T.cost;
   unlockAudio();
   tone(typeKey==="spear"?540:typeKey==="knight"?300:680, 0.09, "square", 0.05, 1.6);
@@ -823,14 +892,41 @@ function bannersHeld(side){
 let TERR_K = 0.04;
 function goldRate(side){
   const base = 22 + Math.min(1, G.t/150) * 26;
-  return base * (1 - 3*TERR_K + TERR_K * bannersHeld(side));
+  const terr = 1 - 3*TERR_K + TERR_K * bannersHeld(side);
+  return base * terr * (side < 0 ? diff().income : 1);
+}
+
+// Which lane the AI reinforces. At laneIQ 2 it reads the field: shore up the
+// lane it is losing hardest, or pour into one you have left open.
+function aiLane(D){
+  if(D.laneIQ === 0) return Math.floor(Math.random()*ROWS);
+  const mine = new Array(ROWS).fill(0), theirs = new Array(ROWS).fill(0);
+  for(const u of G.units){
+    if(u.dead) continue;
+    if(u.side < 0) mine[u.row]++; else theirs[u.row]++;
+  }
+  if(D.laneIQ === 1){
+    let best = 0, bv = 1e9;
+    for(let i=0;i<ROWS;i++){ const v = mine[i] + Math.random()*0.4;
+      if(v < bv){ bv = v; best = i; } }
+    return best;
+  }
+  let best = 0, bs = -1e9;
+  for(let i=0;i<ROWS;i++){
+    // deficit = how badly outnumbered here; empty player lanes are a free run
+    const score = (theirs[i] - mine[i])*1.6 + (theirs[i]===0 ? 1.2 : 0)
+                + Math.random()*0.8;
+    if(score > bs){ bs = score; best = i; }
+  }
+  return best;
 }
 
 function enemyBrain(dt){
   G.eGold = Math.min(G.goldMax, G.eGold + goldRate(-1) * dt);
   G.eBrainCd -= dt;
   if(G.eBrainCd > 0) return;
-  G.eBrainCd = 0.12 + Math.random()*0.16;
+  const D = diff();
+  G.eBrainCd = D.cd + Math.random()*D.cd*0.8;
   let ps=0, pk=0, pa=0;
   for(const u of G.units){ if(u.dead||u.side!==1) continue;
     if(u.type==="spear") ps++; else if(u.type==="knight") pk++; else pa++; }
@@ -839,16 +935,16 @@ function enemyBrain(dt){
   // the AI could never bank for a 60g Knight — it kept dribbling gold into
   // 30g Spears, which is precisely what an archer line wants to be fed.
   let want, commit = false;
-  if(pk >= 2){ want = "spear"; }
-  else if(pa >= 2){ want = "knight"; commit = true; }
-  else if(ps >= 4){ want = "archer"; commit = true; }
+  if(pk >= D.counterAt){ want = "spear"; }
+  else if(pa >= D.counterAt){ want = "knight"; commit = true; }
+  else if(ps >= D.counterAt*2){ want = "archer"; commit = true; }
   else { const r = Math.random(); want = r<0.55 ? "spear" : r<0.85 ? "knight" : "archer"; }
 
   const T = TYPES[want];
-  if(G.eGold >= T.cost){ G.eGold -= T.cost; spawn(want, -1); return; }
+  if(G.eGold >= T.cost){ G.eGold -= T.cost; spawn(want, -1, aiLane(D)); return; }
   // can't afford the counter yet: bank for it rather than buy a bad trade
   if(commit) return;
-  if(G.eGold >= 30){ G.eGold -= 30; spawn("spear", -1); }
+  if(G.eGold >= 30){ G.eGold -= 30; spawn("spear", -1, aiLane(D)); }
 }
 
 function update(dt){
@@ -1312,6 +1408,35 @@ function drawLeaves(){
   }
 }
 
+// Lanes were always in the simulation; now the player can see and choose one.
+function laneY(i){ return GROUND_Y + ROW_Y[i]; }
+function laneAt(py){
+  let best = 0, bd = 1e9;
+  for(let i=0;i<ROWS;i++){ const d = Math.abs(py - laneY(i)); if(d < bd){ bd = d; best = i; } }
+  return best;
+}
+function drawLanes(){
+  ctx.globalAlpha = 0.13;                       // faint furrows
+  for(let i=0;i<ROWS-1;i++){
+    const y = Math.round((laneY(i)+laneY(i+1))/2);
+    for(let x=0;x<W;x+=6) px(x, y, 3, 1, "#241b2b");
+  }
+  ctx.globalAlpha = 1;
+  const y = laneY(G.lane);                      // the selected lane
+  const pulse = 0.26 + Math.sin(G.wind*4)*0.07 + G.laneFlash*0.40;
+  ctx.globalAlpha = pulse;
+  px(0, y-7, W, 15, "#ffe9a8");
+  ctx.globalAlpha = Math.min(1, pulse*1.6);
+  for(let x=0;x<W;x+=4){ px(x, y-8, 2, 2, "#fff6d2"); px(x, y+7, 2, 2, "#fff6d2"); }
+  ctx.globalAlpha = 1;
+  for(let i=0;i<3;i++){                         // deploy chevrons
+    const o = ((G.wind*26 + i*11) % 34);
+    ctx.globalAlpha = Math.max(0, 0.8 - o/40);
+    px(18 + o, y-3, 6, 6, "#ffe9a8");
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawBanners(){
   for(const b of G.banners){
     const set = BANNER[b.owner];
@@ -1356,7 +1481,7 @@ function rankScale(row){ return 0.86 + (row/(ROWS-1))*0.22; }
 
 function drawUnit(u){
   const S = SPR[u.type][u.side];
-  const frame = u.atkAnim > 0.06 ? 2 : (Math.floor(u.bob*0.9) % 2);
+  const frame = u.atkAnim > 0.06 ? 4 : (Math.floor(u.bob*0.8) % 4);
   const img = u.flash > 0 ? S.flashes[frame]
             : u.row <= 1  ? S.far[frame]
             :               S.frames[frame];
@@ -1400,7 +1525,7 @@ function drawDying(d){
   ctx.translate(x, y);
   ctx.rotate(ang);
   const dw = Math.round(S.w*k), dh = Math.round(S.h*k);
-  const img = d.t < 0.08 ? S.flashes[2] : S.frames[2];
+  const img = d.t < 0.08 ? S.flashes[4] : S.frames[4];
   ctx.drawImage(img, -dw/2|0, -dh|0, dw, dh);
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1512,6 +1637,7 @@ function pauseLayout(){
   return PAUSE_ITEMS.map((label,i)=>({label, x, y:y0+i*(bh+gap), w:bw, h:bh}));
 }
 const SETTINGS_ROWS = [
+  {key:"difficulty",  label:"DIFFICULTY",     type:"choice"},
   {key:"music",       label:"MUSIC",          type:"slider"},
   {key:"sfx",         label:"SOUND",          type:"slider"},
   {key:"shake",       label:"SCREEN SHAKE",   type:"toggle"},
@@ -1526,6 +1652,10 @@ function settingsLayout(){
     if(r.type==="slider"){
       o.minus = {x:x+150, y:y+3, w:18, h:17};
       o.bar   = {x:x+172, y:y+7, w:74, h:9};
+      o.plus  = {x:x+250, y:y+3, w:18, h:17};
+    } else if(r.type==="choice"){
+      o.minus = {x:x+150, y:y+3, w:18, h:17};
+      o.val   = {x:x+170, y:y+3, w:78, h:17};
       o.plus  = {x:x+250, y:y+3, w:18, h:17};
     } else {
       o.tog = {x:x+188, y:y+3, w:80, h:17};
@@ -1555,7 +1685,13 @@ function drawSettingsMenu(){
   for(const r of L.rows){
     panel(r.x, r.y, r.w, r.h, "#33261a", P.panelD, P.panelL, 2);
     txt(r.label, r.x+10, r.y+16, 9, P.cream, "left", false);
-    if(r.type==="slider"){
+    if(r.type==="choice"){
+      mbtn({...r.minus, label:"<"}, hoverMenu===r.key+"-");
+      panel(r.val.x, r.val.y, r.val.w, r.val.h, "#4a3a2a", P.panelD, P.panelL, 2);
+      txt(DIFF[OPT.difficulty].name, r.val.x+r.val.w/2, r.val.y+12, 9,
+          "#ffe9a8", "center", false);
+      mbtn({...r.plus, label:">"}, hoverMenu===r.key+"+");
+    } else if(r.type==="slider"){
       mbtn({...r.minus, label:"-"}, hoverMenu===r.key+"-");
       const v = OPT[r.key];
       capsule(r.bar.x, r.bar.y, r.bar.w, r.bar.h, v, v>0?P.gold:"#6a5a44", P.goldL);
@@ -1589,7 +1725,12 @@ function menuClick(p){
   if(G.overlay==="settings"){
     const L = settingsLayout();
     for(const r of L.rows){
-      if(r.type==="slider"){
+      if(r.type==="choice"){
+        if(inBox(p,r.minus)){ OPT.difficulty=(OPT.difficulty+DIFF.length-1)%DIFF.length;
+          saveOpt(); tone(420,0.06,"square",0.04); return true; }
+        if(inBox(p,r.plus)){ OPT.difficulty=(OPT.difficulty+1)%DIFF.length;
+          saveOpt(); tone(700,0.06,"square",0.04); return true; }
+      } else if(r.type==="slider"){
         if(inBox(p,r.minus)){ OPT[r.key]=Math.max(0, +(OPT[r.key]-0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(420,0.05,"square",0.04); return true; }
         if(inBox(p,r.plus)) { OPT[r.key]=Math.min(1, +(OPT[r.key]+0.1).toFixed(2)); applyVolumes(); saveOpt(); tone(700,0.05,"square",0.04); return true; }
         if(inBox(p,r.bar))  { OPT[r.key]=Math.max(0,Math.min(1,(p.x-r.bar.x)/r.bar.w)); applyVolumes(); saveOpt(); return true; }
@@ -1627,6 +1768,7 @@ function drawHUD(){
       bh>3?"#a8ffd8":bh<3?"#ffb0a0":"#e8dcc0", "left");
   txt(bh+"/6 FLAGS", W-16, 313, 8,
       bh>3?"#a8ffd8":bh<3?"#ffb0a0":"#c9bda4", "right");
+  txt("LANE "+(G.lane+1)+"  [\u2191\u2193]", 92, 313, 8, "#ffe9a8", "left");
 
   ORDER.forEach((k,i)=>{
     const T = TYPES[k], r = cardRect(i);
@@ -1718,7 +1860,7 @@ function drawBattlefield(){
   ctx.save();
   if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
   drawSky(); drawBirds(); drawWater(); drawFarBank();
-  drawTerritory(); drawBanners();
+  drawTerritory(); drawLanes(); drawBanners();
   drawKeep(G.keepP, 1); drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
   // depth-sort the living and the dying together so falling bodies stay in rank
@@ -1782,7 +1924,7 @@ function drawIntro(){
   ribbon(W/2-120+ox, 126, 240, 24, "#3d4a56", "#232d36", "#5d6b78");
   txt("BATTLE "+roman(G.battle), W/2+ox, 144, 16, "#ffd75e", "center");
   txt(atmo().title, W/2+ox, 170, 12, "#eef4f7", "center");
-  txt(atmo().name, W/2+ox, 186, 8, "#b9c6cf", "center");
+  txt(atmo().name + "   \u2022   " + diff().name, W/2+ox, 186, 8, "#b9c6cf", "center");
   ctx.globalAlpha = 1;
 }
 
@@ -1857,10 +1999,10 @@ cv.addEventListener("mousemove", e=>{
   } else if(G.overlay==="settings"){
     const L = settingsLayout();
     for(const r of L.rows){
-      if(r.type==="slider"){
+      if(r.type==="slider" || r.type==="choice"){
         if(inBox(p,r.minus)){ hoverMenu=r.key+"-"; hot=true; }
         if(inBox(p,r.plus)){ hoverMenu=r.key+"+"; hot=true; }
-        if(inBox(p,r.bar)) hot=true;
+        if(r.bar && inBox(p,r.bar)) hot=true;
       } else if(inBox(p,r.tog)) hot=true;
     }
     if(inBox(p,L.back)){ hoverMenu="BACK"; hot=true; }
@@ -1885,6 +2027,10 @@ cv.addEventListener("pointerdown", e=>{
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; return; }
   if(inBox(p,SPEED_BTN)){ G.speed = G.speed===1?2:1; return; }
   if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
+  if(p.y > BAND_TOP-8 && p.y < BAND_BOT+8){        // click a lane to select it
+    G.lane = laneAt(p.y); G.laneFlash = 1;
+    tone(500+G.lane*40, 0.05, "square", 0.03); return;
+  }
   ORDER.forEach((k,i)=>{ if(inBox(p,cardRect(i))) tryBuy(k); });
 });
 addEventListener("keydown", e=>{
@@ -1892,7 +2038,11 @@ addEventListener("keydown", e=>{
   const k = e.key.toLowerCase();
   if(G.scene==="title" && (k==="enter"||k===" ")){ startBattle(); e.preventDefault(); return; }
   if(G.scene==="intro"){ G.scene="play"; G.sceneT=0; }
-  if(k==="1") tryBuy("spear");
+  if(k==="arrowup" || k==="w"){ G.lane=Math.max(0,G.lane-1); G.laneFlash=1;
+    tone(560,0.05,"square",0.03); }
+  else if(k==="arrowdown"){ G.lane=Math.min(ROWS-1,G.lane+1); G.laneFlash=1;
+    tone(460,0.05,"square",0.03); }
+  else if(k==="1") tryBuy("spear");
   else if(k==="2") tryBuy("knight");
   else if(k==="3") tryBuy("archer");
   else if(k==="s") G.speed = G.speed===1?2:1;
@@ -1935,6 +2085,7 @@ function step(now){
   if(dt > 0.1) dt = 0.1;
   G.sceneT += dt;
   G.wind += dt;          // render-only clock (sway, birds, leaves)
+  G.laneFlash = Math.max(0, G.laneFlash - dt*3);
   tickMusic();
 
   if(G.scene==="intro" && G.sceneT > 2.3){ G.scene="play"; G.sceneT=0; }
@@ -1960,8 +2111,9 @@ setInterval(()=>{ const now=performance.now(); if(now-last > 220) step(now); }, 
 // DEBUG / BALANCE HARNESS
 //////////////////////////////////////////////////////////////////////////////
 window.__bannerline = {
-  G, TYPES, spawn, reset, tryBuy, update, SPR, PROP, render,
+  G, TYPES, spawn, reset, tryBuy, update, SPR, PROP, render, OPT, DIFF,
   setTerrK(v){ TERR_K = v; }, getTerrK(){ return TERR_K; },
+  setDiff(v){ OPT.difficulty = v; }, getDiff(){ return DIFF[OPT.difficulty].name; },
   sim(seconds, policy){
     reset();
     const dt = 1/30;

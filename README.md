@@ -9,6 +9,7 @@ A 2D pixel-art **lane pusher** — not tower defense. Knights of a river keep ag
 | | |
 |---|---|
 | `1` / `2` / `3` or click | Buy Spearman / Knight / Archer |
+| `↑` `↓` or click the field | Choose the deployment lane |
 | `S` | Toggle 1× / 2× speed |
 | `Esc` / `P` / gear icon | Pause & settings |
 | `M` | Mute everything |
@@ -38,10 +39,30 @@ Each one fixes a failure the balance harness caught. Removing any collapses the 
 
 **Archers kite slowly, on a budget, and barely scratch stone.** They retreat at 0.68× speed with a 14-unit total budget, then stand and die — otherwise an unkillable archer ball forms. They also do 0.30× damage to keeps, so archers alone can't siege.
 
+## Lanes
+
+The field is five lanes deep and **you choose which one each unit marches into** — arrow keys, or click the lane directly. Melee only reaches its own lane and the two beside it, so the choice is real: concentrate to punch a hole, or spread to avoid being flanked. An empty lane is a free run at your keep.
+
+The AI picks lanes too, and how well it does so is part of difficulty.
+
+## Difficulty
+
+Four tiers, set in Settings. They scale the AI's **generalship and purse — never unit stats** — so you're beating a better commander rather than smaller numbers.
+
+| Tier | Enemy income | Decision interval | Counters at | Lane choice | Measured win rate |
+|---|---|---|---|---|---|
+| Recruit | 0.80x | 0.34s | 3 units | random | 95% |
+| Soldier *(default)* | 1.00x | 0.20s | 2 units | least-crowded | 63% |
+| Veteran | 1.12x | 0.14s | 2 units | tactical | 26% |
+| Warlord | 1.26x | 0.10s | 1 unit | tactical | 11% |
+
+Win rates are from 19 headless runs each against a player policy that mirrors the AI's own algorithm, including its lane logic. Median match length scales 43s to 110s across the tiers.
+
 ## Settings
 
 Reachable from the title screen or the in-game gear icon (`Esc` / `P`). All options persist to `localStorage`:
 
+- **Difficulty** — Recruit / Soldier / Veteran / Warlord
 - **Music** and **Sound** volumes, on independent audio buses (0–100%)
 - **Screen shake** — off for motion sensitivity
 - **Damage numbers** — off for a cleaner field
@@ -53,7 +74,9 @@ The pause menu offers Resume / Settings / Restart / Quit to title.
 
 Two **factions**, not a palette swap: blue-and-steel humans versus a green goblin horde — spear skirmishers with lashed flint, a hulking brute with a bone club and plank shield, and a hooded shaman carrying a burning skull-staff. The player defends a crenellated stone keep; the goblins hold a sharpened-log palisade crowned with a skull totem. Two silhouettes beat one silhouette in two colours for readability in a crowd.
 
-**Depth by rank.** The five lanes aren't just y-offsets — back rows draw ~14% smaller from pre-dimmed sprite variants, front rows at full size and contrast. Without it a twenty-unit scrum reads as a flat sticker sheet.
+**Depth by rank.** Back rows draw ~14% smaller from pre-dimmed sprite variants, front rows at full size and contrast. Without it a twenty-unit scrum reads as a flat sticker sheet.
+
+**A 4-beat gait.** Units walk on a proper contact/passing/contact/passing cycle with body bob and arm swing, not a 2-frame shuffle — five baked frames per unit per side (four walk, one attack).
 
 **Combat reads in motion.** Units topple and fall rather than vanishing, pivoting at the feet away from the blow. Melee swings draw an arc with a spark at the point of impact, cleaves get a bigger, hotter one, and arrows stick in their target for a moment.
 
@@ -99,4 +122,8 @@ python -m http.server 5784
 
 ## Status
 
-v0, feel-first: one battle, three units, one AI. Combat, pacing and presentation are settled, and the atmosphere system is already campaign-shaped (each battle draws the next sky). The open question is depth: the player's entire input is buying one of three units, with no placement, orders or abilities. Next step is either a short campaign slice with real per-battle variation, or commander abilities to deepen the battle itself.
+v0. One battle, three units, four difficulty tiers. Combat, pacing, presentation and player agency are settled — lane choice closed the "no placement" gap, and the atmosphere system is already campaign-shaped (each battle draws the next sky).
+
+The remaining gap is **content**: it's still a single battle, so there's no reason to play a fifth time beyond climbing difficulty. Next step is a short campaign slice with real per-battle variation (a terrain or objective twist, then a boss unit) to test whether the core sustains repetition before committing to a full campaign.
+
+Known rough edges: the unit sprites are improved but not exceptional and would benefit from real pixel-art iteration; there's no responsive layout, so phones are untested.
