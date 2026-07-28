@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bannerline mode verification</title>
+<style>
+body{font:14px system-ui;background:#111820;color:#e8edf0;padding:24px}
+iframe{position:absolute;left:-9999px;width:640px;height:360px}
+table{border-collapse:collapse}td,th{padding:8px 12px;border:1px solid #40505b}
+.pass{color:#8ff0b5}.fail{color:#ff9280}
+</style>
+<h1>Bannerline mode verification</h1>
+<p id="status">Running shared simulation…</p>
+<table><thead><tr><th>Mode</th><th>Ended</th><th>Time</th><th>Wave</th><th>Bosses</th><th>Result</th></tr></thead><tbody></tbody></table>
+<iframe src="index.html"></iframe>
+<script>
+const frame=document.querySelector("iframe"),status=document.querySelector("#status"),body=document.querySelector("tbody");
+frame.onload=()=>{
+  try{
+    const rows=frame.contentWindow.__bannerline.modeSweep();
+    body.innerHTML=rows.map(r=>`<tr><td>${r.mode}</td><td>${r.ended}</td><td>${r.time}s</td><td>${r.wave}</td><td>${r.bosses}</td><td>${r.result||"running at limit"}</td></tr>`).join("");
+    const fixed=rows.filter(r=>!["endless","draft"].includes(r.mode));
+    const rush=rows.find(r=>r.mode==="bossrush");
+    const pass=fixed.every(r=>r.ended&&r.result==="VICTORY")&&rush&&rush.bosses>=7&&rows.every(r=>r.time>0);
+    status.className=pass?"pass":"fail";
+    status.textContent=pass?"PASS — every finite mode terminated and survival modes advanced.":"FAIL — inspect rows below.";
+  }catch(e){status.className="fail";status.textContent="FAIL — "+e.message;}
+};
+</script>

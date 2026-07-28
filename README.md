@@ -48,7 +48,7 @@ and fight 10% faster. Animated coins make the continuing income visible.
 
 ## The campaign
 
-**Five worlds, four battles each.** A world has its own palette and its own
+**Seven worlds, four battles each.** A world has its own palette and its own
 standing rule; its fourth battle is a dedicated boss encounter with no enemy
 keep. Boss battles use normal unit deployment and end when the boss dies.
 
@@ -59,6 +59,8 @@ keep. Boss battles use normal unit deployment and end when the boss dies.
 | **The Ember Waste** | **Both keeps burn** at 2.8 HP/s. Neither side can afford to wait. | Two geysers that erupt every 6s with a ~1.3s telegraph, for 46 damage to whoever is standing in that lane. |
 | **The Skyward Steps** | **Vertical ascent.** The field turns bottom-to-top, with deployment columns replacing horizontal lanes. | Mountain stairs, high cloud, and updrafts that throw units into another column. |
 | **The Crown Range** | **Elevation.** Each terrace slows the climb toward the enemy. | Siege gates, avalanche warnings, and a fortified summit. |
+| **The Drowned Coast** | **Tides.** Low lanes flood and slow movement on a visible cycle. | Fog, drowned standards, a seawall, and the Tidefather. |
+| **The Hollowwood** | **Living roots.** A different lane is choked as the forest shifts. | Poison seed-hearts, narrow paths, and the Thornmother. |
 
 ⚠️ The first version of these rules was *18% slower movement* and *24% faster gold*. Both were real and both were completely invisible in play — a world you can't perceive is a palette. Measured: on ice a unit now overshoots its stopping point by **10.6** world units against **6.8** on open ground.
 
@@ -85,6 +87,56 @@ current warband, spells, training, and castle upgrades. A new wave arrives every
 a regional boss. The battlefield rotates through the four horizontal world
 fronts every three waves, with their unique palette, weather, music, and ambient
 motion. A run awards renown and permanently records the highest wave reached.
+
+## War Modes
+
+The War Hall contains seven modes that share the player's persistent army:
+
+- **Endless** — escalating waves, rotating regions, and a boss every fifth wave.
+- **Boss Rush** — an expandable boss registry with a recovery choice between encounters.
+- **Siege Defense** — a two-minute castle-centered defense.
+- **Daily Challenge** — a date-seeded field with fixed army, spells, and difficulty.
+- **Vertical Ascent** — survival on Skyward's vertical battlefield.
+- **Last Stand** — one 48-gold purse, no income, and seventy-five seconds.
+- **Draft Mode** — three starting units and reinforcement choices between waves.
+
+Best scores persist independently for every mode.
+
+## Expanded army and Champions
+
+Crossbowman, Priest, Pikeman, Engineer, Monk, Lancer, Falconer, War Wagon,
+Shield Maiden, Alchemist, Duelist, Necromancer, and Banner Guard add armor
+piercing, healing, boss stagger, repairs, cleansing, charge attacks, back-line
+hunting, mobile projectile cover, interception, acid, elite hunting, temporary
+thralls, and a non-Champion rally aura.
+
+Champions are expensive mortal deployments—not free permanent heroes. Only one
+Champion may be placed in a five-unit warband. Paladin, Standard-Bearer,
+Beastmaster, Runesmith, Stormcaller, Royal Engineer, and Dragon Rider each have
+an automatic signature ability and two ability-upgrade levels.
+
+## Boss encounters
+
+Bosses use three health phases and a visible Stagger Gauge. Ballista bolts,
+blasts, and Pikemen contribute extra stagger. Filling the gauge interrupts the
+current ability, stuns the boss, opens a vulnerability window, and knocks it
+backward. Temporary resistance after recovery prevents stun-locking.
+
+The Tidefather telegraphs lane-wide tidal surges. The Thornmother telegraphs
+root attacks and summons Rootlings. Both are dedicated castle-free fourth-stage
+bosses and automatically appear in Boss Rush.
+
+## Tactical command layer
+
+- Order each lane to **Advance, Hold, or Retreat** (`F`).
+- Purchase one unit into **Reserve** and release it later (`Q`).
+- Select Vanguard, Bulwark, or Arcane doctrine during a briefing (`D`).
+- Choose a safer or more rewarding route (`B`).
+- Capture the Shrine and Mine for healing or extra battle gold.
+- Read the next enemy deployment in the HUD.
+- Earn two temporary veterancy ranks during battle.
+- Hunt rare enemy field commanders that strengthen nearby troops.
+- Complete optional objectives and choose post-battle spoils.
 
 ## Lanes
 
@@ -125,7 +177,7 @@ The first ever battle is guided — nine steps that gate on what you actually do
 
 ## The campaign map, the store and the save
 
-A parchment **campaign map** with twenty nodes shows what's cleared, what's next
+A parchment **campaign map** with twenty-eight nodes shows what's cleared, what's next
 and what's locked; progress, renown and unlocks persist to `localStorage`
 automatically.
 
@@ -142,12 +194,16 @@ Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it wit
 | Deeper Coffers — 3 levels | +9% gold income each |
 | Standing Army — 2 levels | +9 starting gold each |
 
-The Quartermaster now has separate **Army**, **Spells**, and **Castle** ledgers.
+The Quartermaster has separate **Army**, **Champions**, **Spells**, **Castle**,
+and **Armory** ledgers.
 The Army adds the elite Ranger and Paladin, plus two training levels for
 Spearmen, Knights, Archers, and Mages. Training adds a visible battlefield
 behavior: brace, shield wall, volley, or arcane surge. Castle construction adds
 a visible slowing moat and an area-firing mage tower alongside the existing
 walls, ballista, oil, coffers, and muster upgrades.
+
+The Armory sells cosmetic army collections, banner treatments, castle themes,
+deployment effects, and victory effects. Cosmetics never change combat stats.
 
 ## Spells
 
@@ -169,6 +225,8 @@ Each region introduces a signature enemy, while later worlds freely reuse
 everything already encountered: Wolf Riders in the Green Marches, Ice Trolls
 in the Frostreach, Salamanders in the Ember Waste, Harpies on the Skyward
 Steps, and Siege Rams in the Crown Range.
+The Drowned Coast adds Mire Witches and Bog Stalkers; the Hollowwood adds
+Rootlings and Thorn Knights. Later regions continue to reuse earlier enemies.
 
 The **Mage** is the deliberate lane-breaker: its blast ignores rows entirely,
 which is only meaningful *because* everything else no longer does. It costs
@@ -176,7 +234,10 @@ which is only meaningful *because* everything else no longer does. It costs
 
 ## Home and bestiary
 
-The home screen is a **menu**, not a match already in progress — a static scene of the two keeps facing each other, with Campaign / Bestiary / Settings and the difficulty picker. The unit glossary lives in the **Bestiary**, which lists both armies with stats and counters, and greys out what you haven't unlocked.
+The home screen is a **menu**, not a match already in progress. Campaign, War
+Modes, Bestiary, Settings, and the difficulty picker remain separate. The
+paginated Bestiary covers the expanded army, Champions, regional enemies, and
+bosses.
 
 ## Your warband
 
@@ -188,10 +249,10 @@ The **Outrider** and **Sapper** exist because the other four all fight *the line
 
 ## Retired hero system
 
-Permanent, free, respawning heroes were removed because they added a separate
-balance axis that unit prices could not control. Existing saves automatically
-retire an owned hero. The Standard-Bearer art and unit definition remain in the
-source so it can return later as an expensive, mortal warband unit.
+Permanent, free, respawning heroes remain retired because they added a separate
+balance axis that unit prices could not control. Champions replace them as
+expensive, mortal, normally deployed units. The Standard-Bearer has returned in
+this form with a rallying ability.
 
 ## Settings
 
@@ -200,11 +261,13 @@ Reachable from the title screen or the in-game gear icon (`Esc` / `P`). All opti
 Battle speed cycles through **0.5x, 1x, 2x, and 4x**. New battles begin at
 0.5x by default; the fast-start option begins them at 1x.
 
-- **Difficulty** — Recruit / Soldier / Veteran / Warlord
-- **Music** and **Sound** volumes, on independent audio buses (0–100%)
-- **Screen shake** — off for motion sensitivity
-- **Damage numbers** — off for a cleaner field
-- **Start at 2×** — skip the slow opening
+- **Difficulty** — Recruit / Soldier / Veteran / Marshal
+- Independent **Master**, **Music**, **Sound**, and **Interface** volumes
+- Screen shake, damage numbers, high contrast, and reduced motion
+- Weather, particles, and screen-flash controls
+- Automatic pause when focus is lost
+- Fullscreen, save export, and save import
+- Start at 1× or the default 0.5×
 
 The pause menu offers Resume / Settings / Restart / Quit to title.
 
@@ -212,7 +275,7 @@ The pause menu offers Resume / Settings / Restart / Quit to title.
 
 Two **factions**, not a palette swap: blue-and-steel humans versus a green
 goblin horde. The expanded horde adds distinct runner, shield-bearer and bomber
-silhouettes, plus five oversized world bosses. Battlefields now carry
+silhouettes, plus seven oversized world bosses. Battlefields now carry
 world-specific structures—war camps, ice spires and a living caldera—rather
 than relying on palette changes alone.
 
@@ -313,7 +376,7 @@ python -m http.server 5784
 
 ## Status
 
-The current prototype includes a persistent twenty-battle campaign across five
+The current prototype includes a persistent twenty-eight-battle campaign across seven
 worlds, dedicated world bosses, eight level-specific battlefield mechanics, an
 expanded regional enemy roster, two-slot spell loadouts, visible castle
 construction, a campaign map, warband selection, a bestiary, unlockable units,
