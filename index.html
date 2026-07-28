@@ -1,0 +1,974 @@
+<meta charset="utf-8">
+<title>BANNERLINE</title>
+<style>
+  html,body{margin:0;height:100%;background:#10141c;overflow:hidden;
+    font-family:"Courier New",monospace;-webkit-user-select:none;user-select:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block;
+    box-shadow:0 0 0 2px #000, 0 12px 40px rgba(0,0,0,.7)}
+</style>
+<div id="wrap"><canvas id="c" width="640" height="360"></canvas></div>
+<script>
+"use strict";
+//////////////////////////////////////////////////////////////////////////////
+// BANNERLINE — lane pusher, feel-first v0
+// One battle. Three units. One front line. Push it to their keep.
+//////////////////////////////////////////////////////////////////////////////
+
+const W = 640, H = 360;
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+// ---- world <-> screen -----------------------------------------------------
+const LANE_L = 56, LANE_R = 584;          // screen x of world 0 and world 100
+const BAND_TOP = 168, BAND_BOT = 274;     // the contested ground, tinted by owner
+const GROUND_Y = 238;                      // baseline of the fighting band
+const sx = w => LANE_L + w * (LANE_R - LANE_L) / 100;
+const wx = s => (s - LANE_L) * 100 / (LANE_R - LANE_L);
+
+// ---- palette --------------------------------------------------------------
+const P = {
+  sky:"#8fd8e8", water:"#2b8c96", waterD:"#1f6f79", waterL:"#54b0b6",
+  farGrass:"#5fbf5a", farGrassD:"#43a247",
+  sand:"#e8d98a", sandD:"#d4c26e", sandL:"#f4e9a8",
+  ownP:"#7fd6c8", ownPd:"#4fae9f",
+  ownE:"#d78b7a", ownEd:"#b3604f",
+  blue:"#4a90c2", blueD:"#2c5f8a", blueL:"#8fd0e8",
+  red:"#c2503c", redD:"#8a2f22", redL:"#e88a72",
+  wood:"#8a5a34", woodD:"#5c3a20",
+  ui:"#2a2118", uiL:"#4a3a28", uiT:"#f4e9c8",
+  bone:"#efe9d8", dark:"#1a1420",
+};
+
+// ---- audio (tiny) ---------------------------------------------------------
+let AC = null;
+function blip(freq, dur, type, vol, slide){
+  if(!AC) return;
+  const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type||"square"; o.frequency.setValueAtTime(freq,t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*slide), t+dur);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol||0.06, t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function noise(dur, vol){
+  if(!AC) return;
+  const n = Math.floor(AC.sampleRate*dur), b = AC.createBuffer(1,n,AC.sampleRate), d = b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * (1-i/n);
+  const s = AC.createBufferSource(); s.buffer = b;
+  const g = AC.createGain(); g.gain.value = vol||0.05;
+  const f = AC.createBiquadFilter(); f.type="lowpass"; f.frequency.value=900;
+  s.connect(f); f.connect(g); g.connect(AC.destination); s.start();
+}
+function unlockAudio(){
+  if(AC) return;
+  try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+}
+
+// ---- unit definitions -----------------------------------------------------
+// The triangle:  SPEAR > KNIGHT > ARCHER > SPEAR
+const TYPES = {
+  spear: {
+    key:"spear", name:"SPEARMAN", cost:30, hp:70, speed:7.0,
+    reach:3.2, dmg:7, rate:0.55, cls:"light",
+    // braced spears are what armour is afraid of
+    bonus:{ heavy:3.2 },
+    beats:"KNIGHT", hint:"Cheap and fast",
+  },
+  knight: {
+    key:"knight", name:"KNIGHT", cost:60, hp:300, speed:3.4,
+    reach:2.8, dmg:14, rate:1.20, cls:"heavy",
+    // a wall, not a blender: it holds frontage, it doesn't farm swarms
+    cleave:3.5, cleaveMult:0.4, armor:{ arrow:0.40 },
+    beats:"ARCHER", hint:"Tanky, slow",
+  },
+  archer: {
+    key:"archer", name:"ARCHER", cost:90, hp:55, speed:4.5,
+    reach:18, kite:11, kiteBudget:14, dmg:17, rate:0.85, cls:"light", ranged:true,
+    bonus:{ light:2.2 },
+    beats:"SPEAR", hint:"Ranged, frail",
+  },
+};
+const ORDER = ["spear","knight","archer"];
+
+// ---- game state -----------------------------------------------------------
+const G = {
+  t:0, over:null, speed:1, paused:false,
+  gold:60, goldMax:240, goldRate:26,
+  eGold:60, eBrainCd:0,
+  units:[], shots:[], nums:[], parts:[], corpses:[],
+  keepP:{hp:400,max:400,x:-4}, keepE:{hp:400,max:400,x:104},
+  front:50, frontTarget:50,
+  timeLeft:180,
+  shake:0, flash:0,
+  banners:[],
+  toast:null, toastT:0,
+};
+
+const BANNER_X = [14, 28, 42, 58, 72, 86];
+function resetBanners(){
+  G.banners = BANNER_X.map(x => ({x, owner:x<50?1:-1, pop:0}));
+}
+
+function reset(){
+  G.t=0; G.over=null; G.speed=1;
+  G.gold=60; G.eGold=60; G.eBrainCd=1.2;
+  G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[];
+  G.keepP={hp:400,max:400,x:-4}; G.keepE={hp:400,max:400,x:104};
+  G.front=50; G.frontTarget=50; G.timeLeft=180;
+  G.shake=0; G.flash=0; G.toast=null; G.toastT=0;
+  resetBanners();
+}
+reset();
+
+// ---- spawning -------------------------------------------------------------
+// The lane has WIDTH. Five rows means five fights happen abreast, so numbers
+// matter and an outnumbered line gets flanked instead of politely queueing.
+const ROWS = 5;
+const ROW_Y = [-26, -13, 0, 13, 26];
+
+function pickRow(side){
+  const count = new Array(ROWS).fill(0);
+  for(const u of G.units) if(!u.dead && u.side===side) count[u.row]++;
+  let best = 0, bv = 1e9;
+  for(let i=0;i<ROWS;i++){
+    const v = count[i] + Math.random()*0.4;   // jitter breaks ties naturally
+    if(v < bv){ bv = v; best = i; }
+  }
+  return best;
+}
+
+let UID = 1;
+function spawn(typeKey, side, row){
+  const T = TYPES[typeKey];
+  const r = row===undefined ? pickRow(side) : row;
+  const u = {
+    id:UID++, side, T, type:typeKey, row:r,
+    x: side>0 ? -2 : 102,
+    y: ROW_Y[r] + (Math.random()*2-1)*1.5,
+    hp:T.hp, maxHp:T.hp,
+    cd: 0.25 + Math.random()*0.3, kiteLeft: T.kiteBudget || 0,
+    vox: (Math.random()*2-1)*1.7,   // cosmetic scatter — ranks shouldn't align
+    flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0,
+  };
+  G.units.push(u);
+  return u;
+}
+
+function tryBuy(typeKey){
+  if(G.over) return false;
+  const T = TYPES[typeKey];
+  if(G.gold < T.cost) { blip(120,0.09,"square",0.03,0.6); return false; }
+  G.gold -= T.cost;
+  spawn(typeKey, 1);
+  unlockAudio();
+  blip(typeKey==="spear"?520:typeKey==="knight"?300:660, 0.09, "square", 0.05, 1.5);
+  return true;
+}
+
+// ---- damage ---------------------------------------------------------------
+function damage(u, amount, src){
+  if(u.dead) return;
+  let a = amount;
+  if(src && u.T.armor && u.T.armor[src]) a *= u.T.armor[src];
+  u.hp -= a;
+  u.flash = 0.14;
+  pushNum(u.x, u.y, Math.round(a), u.side>0 ? "#ffd0c0" : "#fff2b0");
+  if(u.hp <= 0){
+    u.dead = true;
+    G.corpses.push({x:u.x, y:u.y, side:u.side, life:6, kind:Math.random()<0.5?0:1});
+    for(let i=0;i<7;i++) G.parts.push({
+      x:u.x, y:u.y, vx:(Math.random()*2-1)*18, vy:-Math.random()*40-8,
+      life:0.5+Math.random()*0.4, c: u.side>0?P.blueL:P.redL,
+    });
+    noise(0.09, 0.035);
+  }
+}
+function pushNum(x,y,v,c){ G.nums.push({x,y,v,c,life:0.75,vy:-22}); }
+
+// ---- targeting ------------------------------------------------------------
+// Melee only reaches its own row and the two beside it. Archers ignore rows —
+// that flexibility is what you pay 90 gold for.
+function nearestEnemy(u){
+  const melee = !u.T.ranged;
+  let best=null, bd=1e9;
+  for(const o of G.units){
+    if(o.dead || o.side===u.side) continue;
+    if(melee && Math.abs(o.row - u.row) > 1) continue;
+    const d = Math.abs(o.x - u.x);
+    if(d < bd){ bd=d; best=o; }
+  }
+  return best ? {u:best, d:bd} : null;
+}
+function frontFriend(u){
+  // nearest friendly directly ahead in the SAME row — one file per row
+  let best=null, bd=1e9;
+  for(const o of G.units){
+    if(o.dead || o.side!==u.side || o===u || o.row!==u.row) continue;
+    const dx = (o.x - u.x) * u.side;
+    if(dx > 0 && dx < bd){ bd=dx; best=o; }
+  }
+  return best ? {u:best, d:bd} : null;
+}
+
+// ---- combat resolve -------------------------------------------------------
+function attack(u, target){
+  const T = u.T;
+  u.cd = T.rate;
+  u.atkAnim = 0.22;
+  if(T.ranged){
+    G.shots.push({
+      x:u.x, y:u.y-6, tx:target.x, ty:target.y-4, side:u.side,
+      t:0, dur: Math.max(0.18, Math.abs(target.x-u.x)*0.016),
+      dmg: T.dmg * ((T.bonus && T.bonus[target.T.cls]) || 1),
+      src:"arrow", target,
+    });
+    blip(880, 0.05, "triangle", 0.03, 0.7);
+    return;
+  }
+  const mult = (T.bonus && T.bonus[target.T.cls]) || 1;
+  damage(target, T.dmg * mult, "melee");
+  if(T.cleave){
+    // a wide swing: hits everything abreast of the target, not the queue
+    // behind it — so a Knight holds a frontage instead of farming a line
+    for(const o of G.units){
+      if(o.dead || o.side===u.side || o===target) continue;
+      if(Math.abs(o.row - target.row) > 1) continue;
+      if(Math.abs(o.x - target.x) < T.cleave)
+        damage(o, T.dmg*(T.cleaveMult||0.5)*((T.bonus&&T.bonus[o.T.cls])||1), "melee");
+    }
+    G.shake = Math.max(G.shake, 1.4);
+    noise(0.07, 0.05);
+  } else {
+    noise(0.04, 0.025);
+  }
+  target.kb += 0.5 * (T.cleave?2.2:1) * u.side;
+}
+
+function attackKeep(u, keep){
+  u.cd = u.T.rate; u.atkAnim = 0.22;
+  // arrows do little to stone — you need boots on the wall to actually win
+  const dmg = u.T.dmg * (u.T.ranged ? 0.30 : 0.85);
+  keep.hp -= dmg;
+  pushNum(keep.x + (u.side>0?-3:3), -14, Math.round(dmg), "#ffe08a");
+  G.shake = Math.max(G.shake, 2.2);
+  noise(0.12, 0.06);
+  if(keep.hp <= 0){ keep.hp = 0; }
+}
+
+// ---- enemy brain ----------------------------------------------------------
+// Income ramps over the battle so late pushes are decisive and matches
+// don't grind out to a timeout.
+function goldRate(){ return 22 + Math.min(1, G.t/150) * 26; }
+
+function enemyBrain(dt){
+  G.eGold = Math.min(G.goldMax, G.eGold + goldRate() * dt);
+  G.eBrainCd -= dt;
+  if(G.eBrainCd > 0) return;
+  G.eBrainCd = 0.2 + Math.random()*0.25;
+
+  // count what the player is fielding, then counter it
+  let ps=0, pk=0, pa=0;
+  for(const u of G.units){ if(u.dead||u.side!==1) continue;
+    if(u.type==="spear") ps++; else if(u.type==="knight") pk++; else pa++; }
+
+  let want;
+  if(pk >= 2) want = "spear";
+  else if(pa >= 2 && G.eGold >= 60) want = "knight";
+  else if(ps >= 4 && G.eGold >= 90) want = "archer";
+  else {
+    // default push mix, weighted cheap so the line stays alive
+    const r = Math.random();
+    want = r < 0.55 ? "spear" : r < 0.85 ? "knight" : "archer";
+  }
+  // don't drain to zero instantly early on
+  const T = TYPES[want];
+  if(G.eGold >= T.cost){
+    G.eGold -= T.cost;
+    spawn(want, -1);
+  }
+}
+
+// ---- update ---------------------------------------------------------------
+function update(dt){
+  if(G.over){
+    G.shake *= 0.9; G.flash *= 0.9;
+    stepFx(dt);
+    return;
+  }
+  G.t += dt;
+  G.timeLeft = Math.max(0, G.timeLeft - dt);
+
+  G.gold = Math.min(G.goldMax, G.gold + goldRate() * dt);
+  enemyBrain(dt);
+
+  // --- units
+  for(const u of G.units){
+    if(u.dead) continue;
+    const T = u.T;
+    u.cd -= dt;
+    u.flash = Math.max(0, u.flash - dt);
+    u.atkAnim = Math.max(0, u.atkAnim - dt);
+    u.bob += dt * 9;
+
+    // knockback settle
+    if(u.kb){ u.x += u.kb * dt * 6; u.kb *= 0.86; if(Math.abs(u.kb)<0.02) u.kb=0; }
+
+    const tgt = nearestEnemy(u);
+    const keep = u.side>0 ? G.keepE : G.keepP;
+    const keepDist = Math.abs(keep.x - u.x);
+
+    // how close this unit gets to a keep before it starts swinging at it
+    const keepReach = Math.min(T.reach, 9) + 2;
+
+    // KITE: archers give ground rather than let the line reach them. This is
+    // what keeps them behind your spears instead of becoming the front rank.
+    if(T.kite && tgt && tgt.d < T.kite && u.kiteLeft > 0){
+      const back = -u.side;
+      const home = u.side>0 ? -3 : 103;
+      // deliberately slower than the slowest melee, and strictly rationed —
+      // archers buy time and give ground, but can never peel for themselves,
+      // and once the budget is spent they stand and die. Protect them.
+      if((u.x - home) * u.side > 1){
+        const step = T.speed * 0.68 * dt;
+        u.x += step * back;
+        u.kiteLeft -= step;
+      }
+    }
+
+    let engaged = false;
+    if(tgt && tgt.d <= T.reach){
+      engaged = true;
+      if(u.cd <= 0) attack(u, tgt.u);
+    } else if(keepDist <= keepReach){
+      // a breakthrough hits the keep even while the fight rages elsewhere
+      engaged = true;
+      if(u.cd <= 0) attackKeep(u, keep);
+    }
+
+    if(!engaged){
+      const ff = frontFriend(u);
+      const packed = ff && ff.d < 2.4;
+      // SUPPLY LINE: you move fast across ground you own. Territory you've
+      // taken feeds reinforcements to the front instead of stranding them.
+      const ownLand = u.side>0 ? (u.x < G.front - 2) : (u.x > G.front + 2);
+      const spd = T.speed * (ownLand ? 2.4 : 1);
+      if(!packed) u.x += spd * dt * u.side;
+      else if(ff && ff.d < 3.4) u.x += spd * 0.25 * dt * u.side;
+    }
+
+    // soft separation within a row so they pack instead of stacking
+    for(const o of G.units){
+      if(o.dead || o===u || o.row!==u.row) continue;
+      const dx = o.x - u.x;
+      if(Math.abs(dx) < 2.6){
+        const push = (2.6 - Math.abs(dx)) * 0.9 * dt;
+        const dir = dx >= 0 ? -1 : 1;
+        u.x += push * dir;
+      }
+    }
+    u.x = Math.max(-6, Math.min(106, u.x));
+  }
+
+  // --- arrows
+  for(const s of G.shots){
+    s.t += dt;
+    if(s.t >= s.dur){
+      s.done = true;
+      if(s.target && !s.target.dead) damage(s.target, s.dmg, "arrow");
+    }
+  }
+  G.shots = G.shots.filter(s => !s.done);
+
+  // --- cull dead
+  const before = G.units.length;
+  G.units = G.units.filter(u => !u.dead);
+  if(G.units.length !== before) {} // corpses already pushed
+
+  // --- FRONT LINE (the whole point of the game) ------------------------
+  // Measured from the leading THIRD of each army, not the single most
+  // advanced unit — one lucky flanker shouldn't claim the whole field.
+  const pXs = [], eXs = [];
+  for(const u of G.units){ (u.side>0 ? pXs : eXs).push(u.x); }
+  pXs.sort((a,b)=>b-a); eXs.sort((a,b)=>a-b);
+  const lead = arr => {
+    if(!arr.length) return null;
+    const n = Math.max(1, Math.ceil(arr.length*0.34));
+    let s=0; for(let i=0;i<n;i++) s+=arr[i];
+    return s/n;
+  };
+  const pMax = lead(pXs), eMin = lead(eXs);
+  if(pMax!==null && eMin!==null) G.frontTarget = (Math.max(pMax,eMin) + Math.min(pMax,eMin))/2;
+  else if(pMax!==null) G.frontTarget = Math.max(pMax, 50 - 0);
+  else if(eMin!==null) G.frontTarget = Math.min(eMin, 50);
+  else G.frontTarget = 50;
+  G.frontTarget = Math.max(2, Math.min(98, G.frontTarget));
+  G.front += (G.frontTarget - G.front) * Math.min(1, dt * 2.4);
+
+  // banner flips
+  for(const b of G.banners){
+    const should = G.front > b.x ? 1 : -1;
+    if(should !== b.owner){
+      b.owner = should; b.pop = 1;
+      G.toast = should>0 ? "GROUND TAKEN" : "GROUND LOST";
+      G.toastT = 1.4;
+      blip(should>0?740:260, 0.16, "square", 0.05, should>0?1.5:0.6);
+      G.flash = Math.max(G.flash, should>0?0.35:0.2);
+    }
+    b.pop = Math.max(0, b.pop - dt*2.2);
+  }
+
+  // --- win / lose
+  if(G.keepE.hp <= 0) endGame("VICTORY", "Their keep is rubble.");
+  else if(G.keepP.hp <= 0) endGame("DEFEAT", "Your keep has fallen.");
+  else if(G.timeLeft <= 0){
+    const pf = G.keepP.hp / G.keepP.max, ef = G.keepE.hp / G.keepE.max;
+    if(pf > ef) endGame("VICTORY", "Time. You held more keep.");
+    else if(ef > pf) endGame("DEFEAT", "Time. They held more keep.");
+    else endGame("STALEMATE", "Time. Dead even.");
+  }
+
+  stepFx(dt);
+}
+
+function stepFx(dt){
+  for(const n of G.nums){ n.life -= dt; n.y += n.vy * dt; n.vy += 40*dt; }
+  G.nums = G.nums.filter(n => n.life > 0);
+  for(const p of G.parts){ p.life -= dt; p.x += p.vx*dt*0.16; p.y += p.vy*dt; p.vy += 190*dt; }
+  G.parts = G.parts.filter(p => p.life > 0);
+  for(const c of G.corpses) c.life -= dt;
+  G.corpses = G.corpses.filter(c => c.life > 0);
+  G.shake *= Math.pow(0.0015, dt);
+  G.flash *= Math.pow(0.02, dt);
+  G.toastT = Math.max(0, G.toastT - dt);
+}
+
+function endGame(title, sub){
+  if(G.over) return;
+  G.over = {title, sub};
+  G.shake = 5;
+  blip(title==="VICTORY"?440:180, 0.5, "square", 0.07, title==="VICTORY"?2.2:0.5);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// RENDER
+//////////////////////////////////////////////////////////////////////////////
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
+
+function drawBackdrop(){
+  px(0,0,W,84,P.sky);
+  px(0,62,W,14,P.farGrassD);          // far treeline
+  px(0,76,W,58,P.water);
+  for(let i=0;i<W;i+=8){
+    px(i, 80+Math.sin(i*0.05+G.t*0.7)*2, 6, 2, P.waterL);
+    px(i+3, 102+Math.sin(i*0.07-G.t*0.5)*2, 5, 2, P.waterD);
+    px(i, 122+Math.sin(i*0.04+G.t*0.9)*2, 7, 2, P.waterL);
+  }
+  px(0,134,W,34,P.farGrass);          // near bank
+  px(0,134,W,4,"#79d572");
+  for(let i=0;i<10;i++) drawTree(((i*79+30)%(W-20)), 166, i%3);
+}
+
+function drawTree(x,y,k){
+  if(k===0){
+    px(x+4,y-8,3,10,P.woodD);
+    px(x,y-20,11,12,"#4fae4a"); px(x+2,y-24,7,6,"#5fbf5a"); px(x+1,y-19,9,3,"#3d8f3a");
+  } else if(k===1){
+    px(x+4,y-6,3,8,P.woodD);
+    px(x+1,y-18,9,12,"#e0c04a"); px(x+3,y-22,5,6,"#f0d45a");
+  } else {
+    px(x,y-6,10,6,"#3f9c58"); px(x+2,y-9,6,4,"#4fb068");
+  }
+}
+
+// The whole contested band is coloured by who owns it. This IS the game —
+// if you can't read the front line at a glance, nothing else matters.
+function drawTerritory(){
+  const fx = sx(G.front);
+  const h = BAND_BOT - BAND_TOP;
+  for(let x = 0; x < W; x += 4){
+    let owned = x < fx;
+    const edge = Math.abs(x - fx);
+    // ragged, churning boundary so the seam reads as a fight, not a wipe
+    if(edge < 18 && Math.sin(x*0.7 + G.t*2.5)*0.5+0.5 < 1 - edge/18) owned = !owned;
+    const c  = owned ? P.ownP  : P.ownE;
+    const cd = owned ? P.ownPd : P.ownEd;
+    px(x, BAND_TOP, 4, 5, cd);            // lip
+    px(x, BAND_TOP+5, 4, h-5, c);
+    // scuffed turf texture
+    if((x*7)%5 === 0) px(x, BAND_TOP+12+((x*13)%(h-20)), 3, 2, cd);
+  }
+  // trodden dirt where the armies actually walk
+  const ty = GROUND_Y - 30;
+  ctx.globalAlpha = 0.30;
+  px(0, ty, W, 62, P.sandD);
+  ctx.globalAlpha = 1;
+
+  // the seam itself — a bright shimmering line you can track
+  const pulse = 0.45 + Math.sin(G.t*7)*0.2;
+  ctx.globalAlpha = pulse;
+  px(fx-1, BAND_TOP, 3, h, "#ffffff");
+  ctx.globalAlpha = pulse*0.5;
+  px(fx-4, BAND_TOP, 2, h, "#ffffff");
+  px(fx+3, BAND_TOP, 2, h, "#ffffff");
+  ctx.globalAlpha = 1;
+  // arrow chevrons showing which way it's moving
+  const drift = G.frontTarget - G.front;
+  if(Math.abs(drift) > 0.4){
+    const dir = drift > 0 ? 1 : -1;
+    const c = dir > 0 ? "#c8fff0" : "#ffc8bc";
+    for(let i=0;i<3;i++){
+      const o = ((G.t*40 + i*14) % 42);
+      ctx.globalAlpha = 0.7 - o/60;
+      px(fx + dir*o, BAND_TOP + 6, 5, 3, c);
+      px(fx + dir*o, BAND_BOT - 9, 5, 3, c);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawBanners(){
+  for(const b of G.banners){
+    const x = sx(b.x)|0, y = BAND_TOP + 4;
+    const lift = b.pop * 6;
+    px(x, y-lift, 2, 46, "#6b5236");                 // pole
+    const c  = b.owner>0 ? P.blue  : P.red;
+    const cd = b.owner>0 ? P.blueD : P.redD;
+    const flap = Math.round(Math.sin(G.t*4 + b.x)*1.5);
+    px(x+2, y-lift, 14, 11, c);                      // flag
+    px(x+2, y-lift+11, 14, 3, cd);
+    px(x+16, y-lift+2+flap, 3, 9, c);
+    px(x-1, y-lift-4, 4, 4, "#e8d98a");              // finial
+    if(b.pop > 0){
+      ctx.globalAlpha = b.pop*0.9;
+      px(x-7, y-lift-7, 28, 2, "#ffffff");
+      px(x-4, y-lift+18, 22, 2, "#ffffff");
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawKeep(keep, side){
+  const x = sx(keep.x)|0, y = GROUND_Y;
+  const c  = side>0 ? P.blue  : P.red;
+  const cd = side>0 ? P.blueD : P.redD;
+  const cl = side>0 ? P.blueL : P.redL;
+  const w = 44, h = 62;
+  const bx = x - w/2;
+  // body
+  px(bx, y-h, w, h, cd);
+  px(bx+2, y-h+2, w-4, h-4, c);
+  // stone texture
+  for(let ry=0; ry<h-6; ry+=8){
+    for(let rx=0; rx<w-6; rx+=11){
+      px(bx+3+rx+((ry/8)%2)*4, y-h+4+ry, 9, 6, cl);
+      px(bx+3+rx+((ry/8)%2)*4, y-h+4+ry, 9, 1, side>0?"#a8dcf0":"#f0a894");
+    }
+  }
+  // battlements
+  for(let i=0;i<4;i++) px(bx + i*11, y-h-6, 7, 7, cd);
+  // door
+  px(x-7, y-20, 14, 20, P.woodD);
+  px(x-5, y-17, 10, 17, P.wood);
+  px(x-1, y-10, 2, 4, "#3a2412");
+  // damage cracks as it loses hp
+  const frac = keep.hp / keep.max;
+  if(frac < 0.66){ px(bx+8, y-h+14, 2, 18, P.dark); px(bx+10, y-h+24, 2, 10, P.dark); }
+  if(frac < 0.33){ px(bx+26, y-h+8, 3, 26, P.dark); px(bx+18, y-h+30, 12, 2, P.dark); }
+  // hp bar
+  bar(x-24, y-h-16, 48, 5, frac, side>0?"#5fd06a":"#e05a4a");
+  ctx.font = 'bold 8px "Courier New",monospace';
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#000"; ctx.fillText(Math.ceil(keep.hp), x+1, y-h-19);
+  ctx.fillStyle = P.uiT;  ctx.fillText(Math.ceil(keep.hp), x, y-h-20);
+}
+
+function bar(x,y,w,h,frac,c){
+  px(x-1,y-1,w+2,h+2,"#1a1420");
+  px(x,y,w,h,"#4a4038");
+  px(x,y,Math.max(0,w*frac)|0,h,c);
+  px(x,y,Math.max(0,w*frac)|0,1,"#ffffff44");
+}
+
+// ---- unit sprites (tiny, chunky) -----------------------------------------
+function drawUnit(u){
+  const x = sx(u.x + u.vox)|0, y = (GROUND_Y + u.y)|0;
+  const s = u.side;
+  const walkBob = (Math.abs(u.kb)>0.01 ? 0 : Math.round(Math.sin(u.bob)*0.5));
+  const lunge = u.atkAnim > 0 ? Math.round(u.atkAnim*10)*s : 0;
+  const bx = x + lunge, by = y + walkBob;
+  const c  = s>0 ? P.blue  : P.red;
+  const cd = s>0 ? P.blueD : P.redD;
+  const cl = s>0 ? P.blueL : P.redL;
+  const flash = u.flash > 0;
+
+  ctx.save();
+  if(flash){ ctx.globalAlpha = 1; }
+
+  const F = flash ? "#fff" : null;
+  if(u.type === "spear"){
+    ctx.globalAlpha=.28; px(bx-6,by-1,13,3,"#000"); ctx.globalAlpha=1;
+    px(bx-5, by-15, 11, 15, F||c);                 // body
+    px(bx-5, by-15, 11, 3, F||cd);
+    px(bx-5, by-6, 11, 2, F||cd);                  // belt
+    px(bx-4, by-22, 9, 8, F||"#e0cfa8");           // head
+    px(bx-4, by-23, 9, 3, F||cd);                  // cap
+    px(bx+(s>0?-2:0), by-19, 2, 2, F||"#2a2430");  // eye
+    px(bx+(s>0?6:-7), by-30, 2, 30, F||"#7a5a3a"); // shaft
+    px(bx+(s>0?6:-7), by-34, 2, 5, "#e4e4e4");     // point
+  } else if(u.type === "knight"){
+    ctx.globalAlpha=.28; px(bx-9,by-1,19,4,"#000"); ctx.globalAlpha=1;
+    px(bx-8, by-23, 17, 23, F||c);                 // body
+    px(bx-8, by-23, 17, 3, F||cl);
+    px(bx-8, by-10, 17, 2, F||cd);
+    px(bx-7, by-33, 15, 11, F||"#c8ccd4");         // helm
+    px(bx-7, by-33, 15, 3, F||cd);
+    px(bx-4, by-28, 9, 3, "#221c28");              // visor slit
+    px(bx-2, by-40, 5, 8, F||cl);                  // plume
+    px(bx-1, by-43, 3, 4, F||cl);
+    const shx = s>0 ? bx-13 : bx+8;
+    px(shx, by-21, 6, 18, F||cd);                  // shield
+    px(shx+1, by-18, 4, 10, F||cl);
+    px(bx+(s>0?9:-11), by-31, 2, 21, "#e8e8e8");   // sword
+    px(bx+(s>0?7:-12), by-13, 6, 2, "#c0a040");
+  } else {
+    ctx.globalAlpha=.28; px(bx-6,by-1,13,3,"#000"); ctx.globalAlpha=1;
+    px(bx-5, by-16, 11, 16, F||c);                 // body
+    px(bx-5, by-16, 11, 3, F||cd);
+    px(bx-6, by-25, 13, 10, F||cd);                // hood
+    px(bx-2, by-21, 5, 5, F||"#e0cfa8");           // face
+    px(bx+(s>0?0:-1), by-20, 2, 2, "#2a2430");
+    const bxx = bx + (s>0 ? 8 : -9);               // bow
+    px(bxx, by-26, 2, 22, "#8a6a3a");
+    px(bxx-(s>0?2:-2), by-28, 2, 3, "#8a6a3a");
+    px(bxx-(s>0?2:-2), by-7, 2, 3, "#8a6a3a");
+    px(bxx-(s>0?3:-3), by-24, 1, 18, "#d8d0b8");   // string
+  }
+  ctx.restore();
+
+  // hp pip (only when hurt, keeps the field clean)
+  if(u.hp < u.maxHp){
+    const w = u.type==="knight" ? 20 : 14;
+    bar(bx - w/2, by - (u.type==="knight"?48:36), w, 3, u.hp/u.maxHp, s>0?"#6fe07a":"#e86a5a");
+  }
+}
+
+function drawCorpse(c){
+  const x = sx(c.x)|0, y = (GROUND_Y + c.y)|0;
+  ctx.globalAlpha = Math.min(1, c.life/2);
+  if(c.kind===0){
+    px(x-3,y-4,6,5,P.bone); px(x-2,y-3,1,1,"#2a2430"); px(x+1,y-3,1,1,"#2a2430");
+    px(x-2,y-1,4,1,"#2a2430");
+  } else {
+    px(x-4,y-2,9,2,P.bone); px(x-5,y-3,2,4,P.bone); px(x+4,y-3,2,4,P.bone);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawForeground(){
+  px(0,BAND_BOT,W,300-BAND_BOT,P.farGrass);
+  px(0,BAND_BOT,W,4,"#79d572");
+  for(let i=0;i<7;i++) drawTree((i*97+24)%(W-24), 297, (i+1)%3);
+}
+
+// ---- UI -------------------------------------------------------------------
+const CARD_Y = 314, CARD_H = 40, CARD_W = 150, CARD_GAP = 12;
+function cardRect(i){
+  const total = ORDER.length*CARD_W + (ORDER.length-1)*CARD_GAP;
+  const x0 = (W - total)/2;
+  return {x: x0 + i*(CARD_W+CARD_GAP), y: CARD_Y, w: CARD_W, h: CARD_H};
+}
+
+function drawUI(){
+  // bottom panel
+  px(0,300,W,60,P.ui);
+  px(0,300,W,2,P.uiL);
+
+  // gold bar
+  const gx = 46, gw = W-92;
+  px(gx-2,303,gw+4,10,"#1a1410");
+  px(gx,305,gw,6,"#5a4a30");
+  const gf = G.gold / G.goldMax;
+  px(gx,305,(gw*gf)|0,6,"#f0c040");
+  px(gx,305,(gw*gf)|0,2,"#ffe890");
+  // coin
+  px(20,302,12,12,"#c09020"); px(22,304,8,8,"#f0c040"); px(24,306,3,3,"#ffe890");
+  ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign="center";
+  ctx.fillStyle="#000"; ctx.fillText(Math.floor(G.gold)+" / "+G.goldMax, W/2+1, 313);
+  ctx.fillStyle="#ffeaa0"; ctx.fillText(Math.floor(G.gold)+" / "+G.goldMax, W/2, 312);
+
+  // cards
+  ORDER.forEach((k,i)=>{
+    const T = TYPES[k], r = cardRect(i);
+    const afford = G.gold >= T.cost && !G.over;
+    const hot = hoverCard === i;
+    px(r.x-2, r.y-2, r.w+4, r.h+4, afford ? "#8a6a3a" : "#3a3028");
+    px(r.x, r.y, r.w, r.h, afford ? (hot ? "#f2e6c4" : "#e4d6b0") : "#6a6058");
+    px(r.x, r.y, r.w, 2, afford ? "#fff6d8" : "#7a7068");
+    // mini portrait
+    drawCardIcon(k, r.x + 22, r.y + 34, afford);
+    // name + hint
+    ctx.textAlign="left";
+    ctx.font='bold 9px "Courier New",monospace';
+    ctx.fillStyle = afford ? "#3a2a18" : "#3a3630";
+    ctx.fillText(T.name, r.x+42, r.y+12);
+    // the triangle, taught on the card itself
+    ctx.font='bold 7px "Courier New",monospace';
+    ctx.fillStyle = afford ? "#2f7d5e" : "#4a4640";
+    ctx.fillText("BEATS "+T.beats, r.x+42, r.y+22);
+    ctx.font='7px "Courier New",monospace';
+    ctx.fillStyle = afford ? "#8a7350" : "#4a4640";
+    ctx.fillText(T.hint, r.x+42, r.y+31);
+    // cost
+    px(r.x+r.w-38, r.y+CARD_H-13, 9, 9, "#c09020");
+    px(r.x+r.w-37, r.y+CARD_H-12, 7, 7, "#f0c040");
+    ctx.font='bold 11px "Courier New",monospace';
+    ctx.fillStyle = afford ? "#2a1e10" : "#4a4640";
+    ctx.fillText(T.cost, r.x+r.w-26, r.y+CARD_H-5);
+    // key hint
+    ctx.textAlign="right";
+    ctx.font='bold 8px "Courier New",monospace';
+    ctx.fillStyle = afford ? "#a08858" : "#5a5650";
+    ctx.fillText("["+(i+1)+"]", r.x+r.w-5, r.y+12);
+  });
+
+  // top bar
+  px(0,0,W,30,"#00000055");
+  ctx.textAlign="left"; ctx.font='bold 11px "Courier New",monospace';
+  ctx.fillStyle="#000"; ctx.fillText("BANNERLINE", 13, 20);
+  ctx.fillStyle=P.uiT;  ctx.fillText("BANNERLINE", 12, 19);
+
+  // timer
+  const m = Math.floor(G.timeLeft/60), s = Math.floor(G.timeLeft%60);
+  ctx.textAlign="right"; ctx.font='bold 11px "Courier New",monospace';
+  const tstr = m+":"+String(s).padStart(2,"0");
+  ctx.fillStyle="#000"; ctx.fillText(tstr, W-11, 20);
+  ctx.fillStyle= G.timeLeft<30 ? "#ff9a80" : P.uiT; ctx.fillText(tstr, W-12, 19);
+
+  // speed toggle
+  ctx.textAlign="center"; ctx.font='bold 9px "Courier New",monospace';
+  px(W/2-22, 6, 44, 17, "#00000066");
+  ctx.fillStyle=P.uiT; ctx.fillText(G.speed+"x  [S]", W/2, 18);
+
+  // objective ribbon
+  ctx.textAlign="center"; ctx.font='bold 9px "Courier New",monospace';
+  const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "EVEN";
+  const dc  = G.front > 50.5 ? "#9ff0d0" : G.front < 49.5 ? "#ffb0a0" : "#e8e0c8";
+  px(W/2-84, 36, 168, 15, "#00000055");
+  ctx.fillStyle=dc; ctx.fillText("FRONT LINE: "+dir, W/2, 47);
+
+  // toast
+  if(G.toastT > 0 && G.toast){
+    ctx.globalAlpha = Math.min(1, G.toastT/0.6);
+    ctx.font='bold 14px "Courier New",monospace';
+    const c = G.toast==="GROUND TAKEN" ? "#a8ffd8" : "#ffb0a0";
+    ctx.fillStyle="#000"; ctx.fillText(G.toast, W/2+1, 76);
+    ctx.fillStyle=c;      ctx.fillText(G.toast, W/2, 75);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function wrapText(text,x,y,maxW,lh){
+  const words = text.split(" ");
+  let line = "", yy = y;
+  for(const w of words){
+    const test = line ? line+" "+w : w;
+    if(ctx.measureText(test).width > maxW && line){
+      ctx.fillText(line, x, yy); line = w; yy += lh;
+    } else line = test;
+  }
+  if(line) ctx.fillText(line, x, yy);
+}
+
+function drawCardIcon(k,x,y,afford){
+  ctx.save();
+  if(!afford) ctx.globalAlpha = 0.45;
+  const fake = {side:1, type:k, x:0, y:0, kb:0, bob:0, atkAnim:0, flash:0,
+                hp:1, maxHp:1, T:TYPES[k]};
+  // draw manually at given screen pos
+  const sxs = x, sys = y;
+  const c=P.blue, cd=P.blueD, cl=P.blueL;
+  if(k==="spear"){
+    px(sxs-3,sys-9,7,9,c); px(sxs-3,sys-9,7,2,cd);
+    px(sxs-2,sys-13,5,5,"#d8c8a8"); px(sxs-2,sys-14,5,2,cd);
+    px(sxs+4,sys-18,1,18,"#7a5a3a"); px(sxs+4,sys-20,1,3,"#dcdcdc");
+  } else if(k==="knight"){
+    px(sxs-5,sys-14,11,14,c); px(sxs-5,sys-14,11,2,cl);
+    px(sxs-4,sys-20,9,7,"#c8ccd4"); px(sxs-4,sys-20,9,2,cd);
+    px(sxs-2,sys-17,5,2,"#2a2430"); px(sxs-1,sys-24,3,5,cl);
+    px(sxs-7,sys-13,4,11,cd); px(sxs+6,sys-19,1,13,"#e8e8e8");
+  } else {
+    px(sxs-3,sys-10,7,10,c); px(sxs-3,sys-10,7,2,cd);
+    px(sxs-3,sys-15,7,6,cd); px(sxs-1,sys-13,3,3,"#d8c8a8");
+    px(sxs+5,sys-14,1,11,"#8a6a3a");
+  }
+  ctx.restore();
+}
+
+function drawOverlay(){
+  if(!G.over) return;
+  ctx.fillStyle = "rgba(10,8,16,0.72)";
+  ctx.fillRect(0,0,W,H);
+  ctx.textAlign="center";
+  ctx.font='bold 26px "Courier New",monospace';
+  const c = G.over.title==="VICTORY" ? "#9ff0b0" : G.over.title==="DEFEAT" ? "#ff9a80" : "#e8e0c8";
+  ctx.fillStyle="#000"; ctx.fillText(G.over.title, W/2+2, 150);
+  ctx.fillStyle=c;      ctx.fillText(G.over.title, W/2, 148);
+  ctx.font='10px "Courier New",monospace';
+  ctx.fillStyle="#d8d0c0"; ctx.fillText(G.over.sub, W/2, 172);
+  ctx.font='9px "Courier New",monospace';
+  ctx.fillStyle="#a89880";
+  ctx.fillText("your keep "+Math.ceil(G.keepP.hp)+"   /   their keep "+Math.ceil(G.keepE.hp), W/2, 192);
+  ctx.font='bold 11px "Courier New",monospace';
+  ctx.fillStyle= (Math.sin(G.t*5)>0) ? "#f0e0a0" : "#c0b080";
+  ctx.fillText("PRESS  R  TO FIGHT AGAIN", W/2, 224);
+}
+
+function render(){
+  ctx.save();
+  const sh = G.shake;
+  if(sh > 0.05) ctx.translate((Math.random()*2-1)*sh, (Math.random()*2-1)*sh*0.6);
+
+  drawBackdrop();
+  drawTerritory();
+  drawBanners();
+  drawKeep(G.keepP, 1);
+  drawKeep(G.keepE, -1);
+
+  for(const c of G.corpses) drawCorpse(c);
+
+  // depth sort by y so the crowd reads
+  const sorted = G.units.slice().sort((a,b)=>a.y-b.y);
+  for(const u of sorted) drawUnit(u);
+
+  // arrows
+  for(const s of G.shots){
+    const t = s.t/s.dur;
+    const x = sx(s.x + (s.tx - s.x)*t);
+    const y = GROUND_Y + s.y + (s.ty - s.y)*t - Math.sin(t*Math.PI)*14;
+    px(x, y, 3, 1, "#3a2a18");
+    px(x + (s.side>0?3:-1), y, 1, 1, "#d8d8d8");
+  }
+
+  // particles
+  for(const p of G.parts){
+    ctx.globalAlpha = Math.min(1, p.life*2.5);
+    px(sx(p.x), GROUND_Y + p.y, 2, 2, p.c);
+    ctx.globalAlpha = 1;
+  }
+
+  // damage numbers
+  ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign="center";
+  for(const n of G.nums){
+    ctx.globalAlpha = Math.min(1, n.life*2.2);
+    ctx.fillStyle="#000"; ctx.fillText(n.v, sx(n.x)+1, GROUND_Y+n.y-9);
+    ctx.fillStyle=n.c;    ctx.fillText(n.v, sx(n.x), GROUND_Y+n.y-10);
+    ctx.globalAlpha = 1;
+  }
+
+  drawForeground();
+  ctx.restore();
+
+  drawUI();
+
+  if(G.flash > 0.02){
+    ctx.globalAlpha = G.flash*0.5;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+  }
+
+  drawOverlay();
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// INPUT
+//////////////////////////////////////////////////////////////////////////////
+let hoverCard = -1;
+function toInternal(e){
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+}
+cv.addEventListener("mousemove", e=>{
+  const p = toInternal(e); hoverCard = -1;
+  ORDER.forEach((k,i)=>{ const r=cardRect(i);
+    if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h) hoverCard=i; });
+  cv.style.cursor = hoverCard>=0 ? "pointer" : "default";
+});
+cv.addEventListener("pointerdown", e=>{
+  unlockAudio();
+  const p = toInternal(e);
+  if(G.over){ reset(); return; }
+  // speed toggle
+  if(p.x>W/2-22 && p.x<W/2+22 && p.y>6 && p.y<23){ G.speed = G.speed===1?2:1; return; }
+  ORDER.forEach((k,i)=>{ const r=cardRect(i);
+    if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h) tryBuy(k); });
+});
+addEventListener("keydown", e=>{
+  unlockAudio();
+  const k = e.key.toLowerCase();
+  if(k==="1") tryBuy("spear");
+  else if(k==="2") tryBuy("knight");
+  else if(k==="3") tryBuy("archer");
+  else if(k==="s") G.speed = G.speed===1?2:1;
+  else if(k==="r") reset();
+  else if(k==="p") G.paused = !G.paused;
+  else return;
+  e.preventDefault();
+});
+
+//////////////////////////////////////////////////////////////////////////////
+// LOOP (with a watchdog — RAF stalls when the preview panel is hidden)
+//////////////////////////////////////////////////////////////////////////////
+function fit(){
+  const pad = 16;
+  const sc = Math.max(1, Math.min(
+    Math.floor((innerWidth - pad) / W * 100) / 100,
+    Math.floor((innerHeight - pad) / H * 100) / 100));
+  cv.style.width = (W*sc)+"px";
+  cv.style.height = (H*sc)+"px";
+}
+addEventListener("resize", fit); fit();
+
+let last = performance.now();
+function step(now){
+  let dt = (now - last) / 1000;
+  last = now;
+  if(dt > 0.1) dt = 0.1;
+  if(!G.paused){
+    const sub = G.speed;
+    for(let i=0;i<sub;i++) update(dt);
+  }
+  render();
+}
+function frame(now){ step(now); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+// watchdog: if RAF is starved (hidden preview panel), keep ticking
+setInterval(()=>{
+  const now = performance.now();
+  if(now - last > 220) step(now);
+}, 100);
+
+// debug hook
+window.__bannerline = {
+  G, TYPES, spawn, reset, tryBuy, update,
+  // headless balance sim: run N seconds with a scripted player policy
+  sim(seconds, policy){
+    reset();
+    const dt = 1/30;
+    for(let i=0; i<seconds/dt && !G.over; i++){
+      if(policy) policy(G, tryBuy);
+      update(dt);
+    }
+    return this.snapshot();
+  },
+  snapshot(){ return {
+    t:+G.t.toFixed(2), front:+G.front.toFixed(1),
+    gold:Math.floor(G.gold), eGold:Math.floor(G.eGold),
+    keepP:Math.ceil(G.keepP.hp), keepE:Math.ceil(G.keepE.hp),
+    units:G.units.length, over:G.over,
+    banners:G.banners.map(b=>b.owner),
+  };},
+};
+</script>
