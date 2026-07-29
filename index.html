@@ -292,7 +292,8 @@ function tickMusic(){
   }
   // The oscillator score remains below as a zero-download fallback for
   // browsers that cannot decode the bundled MP3/OGG tracks.
-  if(!recorded.error&&w<5)return;
+  const liveBoss=inBattle&&G.units&&G.units.find(u=>!u.dead&&u.side<0&&u.T.boss);
+  if(!recorded.error&&w<5&&!liveBoss)return;
   const now = AC.currentTime;
   if(MUS.next < now) MUS.next = now + 0.05;
   while(MUS.next < now + 0.4){
@@ -301,7 +302,8 @@ function tickMusic(){
     const motif = MOTIFS[G.scene==="play" ? (battle().world||0) : 0];
     if(beat===0 || beat===4) thudAt(0.10, 0.055, 220, at);
     if(beat===2 || beat===6) thudAt(0.05, 0.020, 2600, at);
-    if(G.scene==="play" && (battle().objective||{}).type==="boss" && beat%2===0)
+    const bossPhase=liveBoss?(liveBoss.phase||1):0;
+    if(liveBoss && beat%2===0)
       thudAt(0.16,0.045,120,at+0.05);
     tone(motif.bass[bar], 0.34, "triangle", 0.045, 1, at, MUSBUS);
     if(beat===0) tone(motif.bass[bar]*2,0.48,"sine",0.018,0.98,at,MUSBUS);
@@ -310,8 +312,10 @@ function tickMusic(){
       const voice=(battle().world||0)===1?"sine":(battle().world||0)===2?"sawtooth":"square";
       tone(l*2,0.18,voice,0.012,1,at,MUSBUS);
       if(beat===4) tone(l*3,0.24,"triangle",0.007,1,at+0.03,MUSBUS);
+      if(bossPhase>=2&&beat%2===0)tone(l,0.11,"sawtooth",0.006,1.01,at+.08,MUSBUS);
+      if(bossPhase>=3&&beat%2===1)thudAt(.045,.018,3200,at);
     }
-    MUS.next += 0.26; MUS.step++;
+    MUS.next += bossPhase>=3?0.22:bossPhase===2?0.24:0.26; MUS.step++;
   }
 }
 function thudAt(dur, vol, cut, delay){
@@ -1860,7 +1864,7 @@ function spawn(typeKey, side, row){
     pop:1, step:Math.random()*6.28, lastStep:0, specialT:0, skillT:0, guardT:0,rallyT:0,
     stagger:0, staggerMax:T.staggerMax||(T.boss?420:0), staggerResist:0, stunned:0,
     xp:0, rank:0, leader:side<0&&!T.boss&&G.t>35&&Math.random()<.07,
-    phase:1, warnT:0,
+    phase:1, warnT:0, warnRow:-1,
   };
   G.units.push(u);
   const deploy=SKINS[(SAVE.equippedSkins||{}).deploy];
@@ -2486,18 +2490,18 @@ function update(dt){
       G.toast="THE MOUNTAIN TREMBLES"; G.toastT=1.2; G.shake=8;
       thud(.55,.12,150);
     } else if(u.type==="tidefather"&&u.specialT>=Math.max(4.5,8-u.phase)){
-      if(!u.warnT){u.warnT=1.15;u.specialT-=.9;G.toast="TIDAL SURGE — MOVE LANES";G.toastT=1.1;}
+      if(!u.warnT){u.warnT=1.15;u.warnRow=(u.row+u.phase)%ROWS;u.specialT-=.9;G.toast="TIDAL SURGE — MOVE LANES";G.toastT=1.1;}
       else if(u.warnT<.18){
         u.specialT=0;u.warnT=0;
-        const row=(u.row+u.phase)%ROWS;
+        const row=u.warnRow;u.warnRow=-1;
         for(const o of G.units)if(!o.dead&&o.side>0&&Math.abs(o.row-row)<=u.phase-1){damage(o,22+u.phase*8,"blast");o.kb-=2;}
         G.shake=7;thud(.5,.1,190);
       }
     } else if(u.type==="thornmother"&&u.specialT>=Math.max(5,9-u.phase)){
-      if(!u.warnT){u.warnT=1.2;u.specialT-=.9;G.toast="ROOTS RISING — CHANGE LANES";G.toastT=1.1;}
+      if(!u.warnT){u.warnT=1.2;u.warnRow=Math.floor(Math.random()*ROWS);u.specialT-=.9;G.toast="ROOTS RISING — CHANGE LANES";G.toastT=1.1;}
       else if(u.warnT<.18){
         u.specialT=0;u.warnT=0;
-        const row=Math.floor(Math.random()*ROWS);
+        const row=u.warnRow;u.warnRow=-1;
         for(const o of G.units)if(!o.dead&&o.side>0&&o.row===row){damage(o,24+u.phase*7,"melee");o.guardT=0;}
         const add=spawn("rootling",-1,row);add.x=Math.min(96,u.x+5);
       }
@@ -4498,6 +4502,16 @@ function drawBattlefield(){
   if(OPT.shake && G.shake > 0.05) ctx.translate((Math.random()*2-1)*G.shake, (Math.random()*2-1)*G.shake*0.6);
   drawSky(); drawBirds(); drawWater(); drawFarBank(); drawWorldLife();
   drawTerritory(); drawBattleLandmark(); drawLanes(); drawBanners(); drawBattleObjects();
+  for(const boss of G.units){
+    if(boss.dead||!boss.T.boss||boss.warnT<=0||boss.warnRow<0)continue;
+    const y=GROUND_Y+ROW_Y[boss.warnRow],pulse=.14+Math.sin(G.wind*18)*.09;
+    ctx.globalAlpha=pulse;
+    px(0,y-13,W,26,boss.type==="tidefather"?"#55c9e8":"#c6e05b");
+    ctx.globalAlpha=1;
+    for(let x=12;x<W;x+=28)px(x,y-2,12,4,boss.type==="tidefather"?"#d8f7ff":"#efffb0");
+    txt(boss.type==="tidefather"?"TIDAL SURGE":"ROOTS RISING",W/2,y-16,7,
+      boss.type==="tidefather"?"#d8f7ff":"#efffb0","center");
+  }
   drawKeep(G.keepP, 1);
   if(!["boss","demolish","endless"].includes((battle().objective||{}).type)) drawKeep(G.keepE, -1);
   for(const c of G.corpses) drawCorpse(c);
