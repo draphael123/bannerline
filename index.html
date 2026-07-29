@@ -27,6 +27,28 @@ const cv  = document.getElementById("c");
 const ctx = cv.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
+// Tiny Swords (Pixel Frog), CC0 edition. These sheets give the most common
+// fighters a shared, professional visual language while Bannerline's bespoke
+// procedural art remains available as a zero-network fallback.
+const ART_SHEETS = {};
+const ART_FILES = {
+  warriorBlue:"assets/sprites/tiny-swords/warrior-blue.png",
+  warriorGold:"assets/sprites/tiny-swords/warrior-yellow.png",
+  archerBlue:"assets/sprites/tiny-swords/archer-blue.png",
+  archerGold:"assets/sprites/tiny-swords/archer-yellow.png",
+  goblinTorch:"assets/sprites/tiny-swords/goblin-torch.png",
+  goblinTnt:"assets/sprites/tiny-swords/goblin-tnt.png",
+  goblinBarrel:"assets/sprites/tiny-swords/goblin-barrel.png",
+  castleBlue:"assets/sprites/tiny-swords/castle-blue.png",
+  castleRed:"assets/sprites/tiny-swords/castle-red.png",
+  trees:"assets/sprites/tiny-swords/trees.png",
+  explosions:"assets/sprites/tiny-swords/explosions.png",
+  fire:"assets/sprites/tiny-swords/fire.png",
+};
+for(const [key,src] of Object.entries(ART_FILES)){
+  const img=new Image(); img.src=src; ART_SHEETS[key]=img;
+}
+
 // ---- world <-> screen -----------------------------------------------------
 const LANE_L = 56, LANE_R = 584;
 const BAND_TOP = 168, BAND_BOT = 274;
@@ -118,22 +140,22 @@ function wipeSave(){
   saveGame();
 }
 const UPGRADES = [
-  { key:"ballista", name:"KEEP BALLISTA", max:3, cost:l=>140+l*90,
+  { key:"ballista", name:"KEEP BALLISTA", max:5, cost:l=>140+l*90,
     desc:l=>l===0 ? "your keep shoots back, every 8s"
                   : "bolt every "+(8-l)+"s  (level "+l+")" },
-  { key:"oil", name:"BOILING OIL", max:2, cost:l=>120+l*90,
+  { key:"oil", name:"BOILING OIL", max:5, cost:l=>120+l*90,
     desc:l=>l===0 ? "burn whatever reaches your gate"
                   : (l*7)+" damage/s at the gate" },
-  { key:"keepHp", name:"REINFORCED WALLS", max:3, cost:l=>110+l*70,
+  { key:"keepHp", name:"REINFORCED WALLS", max:5, cost:l=>110+l*70,
     desc:l=>"+90 keep HP  (now "+(520+l*90)+")" },
-  { key:"income", name:"DEEPER COFFERS",   max:3, cost:l=>130+l*80,
+  { key:"income", name:"DEEPER COFFERS",   max:5, cost:l=>130+l*80,
     desc:l=>"+9% gold income  (now +"+(l*9)+"%)" },
-  { key:"muster", name:"STANDING ARMY",    max:2, cost:l=>90+l*70,
+  { key:"muster", name:"STANDING ARMY",    max:4, cost:l=>90+l*70,
     desc:l=>"+9 starting gold  (now "+(12+l*9)+")" },
-  { key:"moat", name:"CASTLE MOAT", max:3, cost:l=>150+l*100,
+  { key:"moat", name:"CASTLE MOAT", max:5, cost:l=>150+l*100,
     desc:l=>l===0?"visible ditch slows enemies at your wall"
                  :"enemies near your keep slowed "+(18+l*8)+"%" },
-  { key:"mageTower", name:"MAGE TOWER", max:3, cost:l=>180+l*110,
+  { key:"mageTower", name:"MAGE TOWER", max:5, cost:l=>180+l*110,
     desc:l=>l===0?"visible tower launches arcane blasts"
                  :"blast every "+(10-l)+"s  (level "+l+")" },
 ];
@@ -972,18 +994,42 @@ function artMireWitch(c,K,frame){artGobShaman(c,K,frame);R(c,4,15,22,7,"#477e69"
 function artBogStalker(c,K,frame){artSalamander(c,K,frame);R(c,4,17,32,9,"#356f63");R(c,10,12,18,5,"#6ca58a");}
 function artRootling(c,K,frame){artGobRunner(c,K,frame);R(c,8,14,17,18,"#61472d");R(c,5,10,5,12,"#829753");}
 function artThornKnight(c,K,frame){artGobShield(c,K,frame);R(c,3,10,18,31,"#536b38");R(c,5,8,3,5,"#a3b65d");}
+// Specialist silhouettes. Several early prototypes simply pointed new unit
+// names at an existing sprite; these wrappers make equipment and posture read
+// before the player ever reaches the label.
+function artCrossbow(c,K,f){artRanger(c,K,f);R(c,1,21,24,3,"#6a4324");R(c,4,17,3,11,"#c59a52");}
+function artPriest(c,K,f){artMage(c,K,f);R(c,12,7,6,4,"#fff0b8");R(c,14,4,2,10,"#d5a83b");}
+function artPikeman(c,K,f){artSpear(c,K,f);R(c,20,2,3,31,"#b7c0ce");R(c,17,3,9,3,"#edf3f4");}
+function artEngineer(c,K,f){artSapper(c,K,f);R(c,7,7,16,5,"#b47532");R(c,21,17,8,4,"#d5b66b");}
+function artMonk(c,K,f){artMage(c,K,f);R(c,8,9,16,24,"#8a5b31");R(c,12,12,8,3,"#e9d08e");}
+function artLancer(c,K,f){artPaladin(c,K,f);R(c,21,0,3,38,"#e7d8b2");R(c,19,1,8,3,"#7fc4e8");}
+function artFalconer(c,K,f){artRanger(c,K,f);R(c,20,3,7,4,"#8a552b");R(c,25,1,5,3,"#d9c08a");}
+function artWarWagon(c,K,f){artSapper(c,K,f);R(c,1,25,34,12,"#684326");R(c,4,35,8,5,"#2c2430");R(c,23,35,8,5,"#2c2430");}
+function artBeastmaster(c,K,f){artOutrider(c,K,f);R(c,2,12,7,15,"#7b3f2a");R(c,22,10,5,9,"#e4c97c");}
+function artRunesmith(c,K,f){artKnight(c,K,f);R(c,9,17,10,10,"#684b84");R(c,12,19,4,4,"#8ce3e8");}
+function artStormcaller(c,K,f){artMage(c,K,f);R(c,4,7,4,20,"#70cfe9");R(c,22,3,3,15,"#f5e86d");}
+function artRoyalEngineer(c,K,f){artSapper(c,K,f);R(c,3,7,25,4,"#e9c75b");R(c,23,16,8,3,"#7896b5");}
+function artShieldMaiden(c,K,f){artKnight(c,K,f);R(c,1,14,11,23,"#4d88bd");R(c,4,17,5,12,"#d6e8ef");}
+function artAlchemist(c,K,f){artMage(c,K,f);R(c,3,26,7,8,"#83c94a");R(c,23,27,6,7,"#d98ae3");}
+function artDuelist(c,K,f){artRanger(c,K,f);R(c,22,7,2,31,"#eef1e3");R(c,19,12,8,2,"#d5aa46");}
+function artNecromancer(c,K,f){artMage(c,K,f);R(c,7,8,18,27,"#3f315b");R(c,12,11,3,3,"#8ff0be");R(c,20,11,3,3,"#8ff0be");}
+function artBannerGuard(c,K,f){artCaptain(c,K,f);R(c,25,2,3,43,"#6a4324");R(c,28,4,13,10,"#4f9ad0");}
+function artDragonRider(c,K,f){
+  artStormRoc(c,K,f); R(c,13,12,18,13,"#2d6394"); R(c,18,7,8,8,"#d8dee7");
+  R(c,20,3,3,8,"#f5c53f"); R(c,27,5,3,7,"#f5c53f");
+}
 
 const UNIT_ART = {
   "1":  { spear:artSpear,     knight:artKnight,    archer:artArcher,
           mage:artMage,       captain:artCaptain,
           outrider:artOutrider, sapper:artSapper, paladin:artPaladin,
-          ranger:artRanger, crossbow:artRanger, priest:artMage,
-          pikeman:artSpear, engineer:artSapper, standard:artCaptain,
-          monk:artMage,lancer:artPaladin,falconer:artRanger,warwagon:artSapper,
-          beastmaster:artOutrider,runesmith:artKnight,stormcaller:artMage,
-          royalengineer:artSapper,shieldmaiden:artKnight,alchemist:artMage,
-          duelist:artRanger,necromancer:artMage,bannerguard:artCaptain,
-          dragonrider:artFrostRoc },
+          ranger:artRanger, crossbow:artCrossbow, priest:artPriest,
+          pikeman:artPikeman, engineer:artEngineer, standard:artCaptain,
+          monk:artMonk,lancer:artLancer,falconer:artFalconer,warwagon:artWarWagon,
+          beastmaster:artBeastmaster,runesmith:artRunesmith,stormcaller:artStormcaller,
+          royalengineer:artRoyalEngineer,shieldmaiden:artShieldMaiden,alchemist:artAlchemist,
+          duelist:artDuelist,necromancer:artNecromancer,bannerguard:artBannerGuard,
+          dragonrider:artDragonRider },
   "-1": { spear:artGobSpear, knight:artGobBrute, archer:artGobShaman,
           runner:artGobRunner, shield:artGobShield, bomber:artGobBomber,
           overchief:artOverchieftain, frostroc:artFrostRoc, ashtyrant:artAshTyrant,
@@ -1658,11 +1704,12 @@ function gameRand(){
 const G = {
   scene:"title", sceneT:0, overlay:null, battle:1, started:false, shopTab:"army", shopPage:0,
   bestiaryPage:0, settingsPage:0, beat:0,
-  endless:false, mode:null, modeScore:0, modeStage:0, draftRoster:[],draftChoices:[],
+  endless:false, mode:null, modeScore:0, modeStage:0, arenaGold:0, draftRoster:[],draftChoices:[],
   bossReward:false,bossHaste:0,
   endlessWave:1, endlessWorld:0, endlessNext:35,
   ignorePortrait:false,
   lane:2, laneFlash:0, formation:["advance","advance","advance","advance","advance"],
+  momentum:0,warCryT:0,
   bossOut:false, holdT:0, geyT:0, geyFire:0, structureT:0, enemyPreview:"MUSTERING",
   spellsCast:0,
   challenge:null,
@@ -1712,7 +1759,7 @@ function resetBattleObjects(){
 }
 
 function reset(){
-  G.t=0; G.over=null; G.speed=.5; G.spellCd={}; G.spellFlash=0;
+  G.t=0; G.over=null; G.speed=.5; G.spellCd={}; G.spellFlash=0; G.arenaGold=0;
   G.gold=G.mode==="laststand"?48:startGold()+(SAVE.nextBonus==="supply"?8:0); G.eGold=12; G.eBrainCd=1.2;
   if(SAVE.nextBonus){SAVE.nextBonus=null;saveGame();}
   G.units=[]; G.shots=[]; G.nums=[]; G.parts=[]; G.corpses=[]; G.dust=[]; G.rings=[];
@@ -1723,6 +1770,7 @@ function reset(){
              objectiveType === "demolish" || objectiveType === "endless" ? 99999 : 520;
   G.keepP={hp:kh,max:kh,x:-4,ruin:0}; G.keepE={hp:ek,max:ek,x:104,ruin:0};
   G.front=50; G.frontTarget=50; G.timeLeft=180;
+  G.momentum=0;G.warCryT=0;
   G.lane=nearestOpenLane(2); G.laneFlash=0; G.formation=["advance","advance","advance","advance","advance"];
   G.bossOut=false; G.holdT=0; G.structureT=0; G.enemyPreview="MUSTERING"; G.spellsCast=0;
   G.challenge=G.endless?null:(G.battle%2?{type:"noSpells",label:"BONUS: USE NO SPELLS"}:{type:"kills",count:12,label:"BONUS: SLAY 12 ENEMIES"});
@@ -1809,7 +1857,7 @@ function spawn(typeKey, side, row){
     vox: (Math.random()*2-1)*1.7,
     vari: Math.floor(Math.random()*VARIANTS.length),
     flash:0, kb:0, bob:Math.random()*6.28, atkAnim:0, slide:0, fighting:false,
-    pop:1, step:Math.random()*6.28, lastStep:0, specialT:0, skillT:0, guardT:0,
+    pop:1, step:Math.random()*6.28, lastStep:0, specialT:0, skillT:0, guardT:0,rallyT:0,
     stagger:0, staggerMax:T.staggerMax||(T.boss?420:0), staggerResist:0, stunned:0,
     xp:0, rank:0, leader:side<0&&!T.boss&&G.t>35&&Math.random()<.07,
     phase:1, warnT:0,
@@ -1833,6 +1881,24 @@ function tryBuy(typeKey){
   tone(typeKey==="spear"?540:typeKey==="knight"?300:680, 0.09, "square", 0.05, 1.6);
   tone(typeKey==="spear"?810:typeKey==="knight"?450:1020, 0.06, "triangle", 0.02, 1.4, 0.04);
   return true;
+}
+function warCry(){
+  if(G.scene!=="play"||G.over||G.momentum<100)return false;
+  G.momentum=0;G.warCryT=8;
+  for(const u of G.units)if(!u.dead&&u.side>0){
+    u.rallyT=Math.max(u.rallyT,8);u.guardT=Math.max(u.guardT,1.5);
+  }
+  G.toast="WAR CRY — ADVANCE!";G.toastT=2.2;G.flash=.34;G.shake=4;
+  tone(196,.22,"sawtooth",.07,1.8);tone(392,.35,"square",.05,1.25,.1);
+  return true;
+}
+function gainMomentum(n){
+  const before=G.momentum;
+  G.momentum=Math.min(100,G.momentum+n);
+  if(before<100&&G.momentum>=100){
+    G.toast="WAR CRY READY";G.toastT=1.8;
+    tone(523,.1,"square",.04,1.4);tone(784,.16,"triangle",.035,1.1,.08);
+  }
 }
 
 function damage(u, amount, src){
@@ -1859,7 +1925,15 @@ function damage(u, amount, src){
   });
   if(u.hp <= 0){
     u.dead = true;
-    if(u.side < 0) G.stats.kills++;
+    if(u.side < 0){
+      G.stats.kills++;
+      gainMomentum(u.T.boss?30:u.T.bigTarget?12:5);
+      if(G.mode==="arena"){
+        const bounty=u.T.boss?10:u.T.bigTarget?3:1;
+        G.arenaGold+=bounty;
+        if(bounty>1){G.toast="ARENA BOUNTY  +"+bounty;G.toastT=1.2;}
+      }
+    }
     // topple: units fall over instead of popping out of existence
     // topple AWAY from the enemy line — the blow came from the far side
     G.dying.push({ type:u.type, side:u.side, row:u.row, vari:u.vari, x:u.x+u.vox, y:u.y,
@@ -2119,7 +2193,7 @@ function enemyBrain(dt){
 
 function update(dt){
   if(G.over){ G.shake *= 0.9; G.flash *= 0.9; stepFx(dt); return; }
-  if(G.endless && ["endless","draft"].includes(G.mode) && G.t>=G.endlessNext){
+  if(G.endless && ["endless","arena","draft"].includes(G.mode) && G.t>=G.endlessNext){
     G.endlessWave++;
     G.endlessNext+=35;
     // Vertical stages use a different coordinate system, so Endless rotates
@@ -2144,6 +2218,7 @@ function update(dt){
     }
   }
   G.t += dt;
+  G.warCryT=Math.max(0,G.warCryT-dt);
   if(!G.endless) G.timeLeft = Math.max(0, G.timeLeft - dt);
   G.gold = Math.min(G.goldMax, G.gold + goldRate(1) * dt);
   G.structureT+=dt;
@@ -2577,7 +2652,10 @@ function update(dt){
     if(should !== b.owner){
       b.owner = should; b.pop = 1;
       b.pay = 1;
-      if(should>0) G.gold=Math.min(G.goldMax,G.gold+2);
+      if(should>0){
+        G.gold=Math.min(G.goldMax,G.gold+2);
+        gainMomentum(12);
+      }
       else G.eGold=Math.min(G.goldMax,G.eGold+2);
       G.toast = should>0 ? "GROUND TAKEN" : "GROUND LOST";
       G.toastT = 1.5;
@@ -2659,15 +2737,17 @@ function endGame(title, sub){
   G.over = {title, sub};
   G.shake = 6;
   if(G.endless){
-    const survival=["endless","draft"].includes(G.mode);
+    const survival=["endless","arena","draft"].includes(G.mode);
     const score=G.mode==="bossrush"?G.modeStage+(title==="VICTORY"?1:0)
       :survival?Math.max(1,G.endlessWave):Math.floor(G.t);
-    const reward=title==="VICTORY"?100+score*10:Math.min(160,10+score*4);
+    const reward=G.mode==="arena"?G.arenaGold
+      :title==="VICTORY"?100+score*10:Math.min(160,10+score*4);
     if(G.mode==="endless")SAVE.endlessBest=Math.max(SAVE.endlessBest||0,score);
     SAVE.modeBest[G.mode]=Math.max(SAVE.modeBest[G.mode]||0,score);
     SAVE.renown+=reward; saveGame();
     G.over={title:"LINE BROKEN",sub:"wave "+score+"  •  +"+reward+" renown"};
-    G.over={title:title==="VICTORY"?"VICTORY":survival?"LINE BROKEN":"DEFEAT",
+    G.over={title:G.mode==="arena"&&title==="CASHED OUT"?"CASHED OUT"
+      :title==="VICTORY"?"VICTORY":survival?"LINE BROKEN":"DEFEAT",
       sub:(G.mode==="bossrush"?score+" bosses":survival?"wave "+score:score+" seconds")+"  •  +"+reward+" renown"};
     (title==="VICTORY"?[523,659,784]:[220,185,147]).forEach((f,i)=>
       tone(f,.4,title==="VICTORY"?"square":"sawtooth",.045,.7,i*.12));
@@ -2864,6 +2944,7 @@ const ENDLESS_BATTLE = {
 };
 const MODE_DEFS = {
   endless:{name:"ENDLESS",tag:"Escalating armies and milestone bosses.",world:0,pressure:.92},
+  arena:{name:"BOUNTY ARENA",tag:"Every kill earns renown. Elites and bosses pay more.",world:2,pressure:1.08},
   bossrush:{name:"BOSS RUSH",tag:"Defeat the full expandable boss registry.",world:0,pressure:1},
   siege:{name:"SIEGE DEFENSE",tag:"Castle weapons matter. Survive two minutes.",world:4,pressure:1.48},
   daily:{name:"DAILY CHALLENGE",tag:"A fixed warband and battlefield for today.",world:0,pressure:1.22},
@@ -2983,6 +3064,18 @@ function drawFarBank(){
   px(0,132,W,4,g.pl);
   px(0,164,W,6,g.ed);
   for(const s of SCENERY.far){ propShadow(s.k, s.x, s.y); blitProp(s.k, s.x, s.y, s.ph); }
+  // A second, larger canopy layer from the CC0 art pack breaks the old
+  // repeated lollipop-tree silhouette while remaining behind all combat.
+  const trees=ART_SHEETS.trees;
+  if(trees&&trees.complete&&trees.naturalWidth){
+    ctx.save();ctx.globalAlpha=.78;
+    for(let i=0;i<8;i++){
+      const x=22+i*86+Math.sin(i*4.7)*16,frame=(i+Math.floor(G.wind*.45))%4;
+      const sc=.58+(i%3)*.07,sz=Math.round(64*sc);
+      ctx.drawImage(trees,frame*192,0,192,192,x-sz/2,170-sz,sz,sz);
+    }
+    ctx.restore();
+  }
   // wash the baked scenery toward this world's palette
   ctx.globalAlpha = 0.34; px(0,132,W,42,g.p); ctx.globalAlpha = 1;
 }
@@ -3365,6 +3458,11 @@ function drawBattleObjects(){
       px(x-9,y-6,19,6,"#33221d"); px(x-6,y-14,4,10,"#5a3727"); px(x+3,y-18,4,14,"#5a3727");
       const f=.65+Math.sin(G.wind*7+o.x)*.25;
       px(x-6,y-23,13,11,"#e9542e"); px(x-3,y-27,7,12,"#ffb23f");
+      const fire=ART_SHEETS.fire;
+      if(fire&&fire.complete&&fire.naturalWidth){
+        const ff=Math.floor(G.wind*10+o.x)%7;
+        ctx.drawImage(fire,ff*128,0,128,128,x-16,y-36,32,32);
+      }
       glow(x,y-18,30,"rgba(255,92,35,1)",f*.42);
     }
     capsule(x-13,y-31,26,3,o.hp/o.max,o.kind==="drum"?"#d6a357":"#e45b35","#ffffff80");
@@ -3396,7 +3494,10 @@ function drawKeep(keep, side){
   px(cx-30, GROUND_Y-4, 60, 7, "#000");
   px(cx-34, GROUND_Y-2, 68, 3, "#000");
   ctx.globalAlpha = 1;
-  ctx.drawImage(img, x, y);
+  const castle=ART_SHEETS[side>0?"castleBlue":"castleRed"];
+  if(castle&&castle.complete&&castle.naturalWidth&&!keep.ruin){
+    ctx.drawImage(castle,cx-54,GROUND_Y-86,108,86);
+  }else ctx.drawImage(img, x, y);
   const castleSkin=side>0&&SKINS[(SAVE.equippedSkins||{}).castle];
   if(castleSkin){ctx.globalAlpha=.18;px(x+5,y+20,KEEP_W-10,KEEP_H-22,castleSkin.color);ctx.globalAlpha=1;}
 
@@ -3440,6 +3541,11 @@ function drawKeep(keep, side){
   }
   if(dmg >= 1) smokeColumn(cx + (side>0?-14:14), y+22, dmg===2?1.25:0.7, side>0?0:3.3);
   if(keep.ruin){
+    const blast=ART_SHEETS.explosions;
+    if(blast&&blast.complete&&blast.naturalWidth&&keep.ruin<0.72){
+      const frame=Math.min(8,Math.floor(keep.ruin*12.5));
+      ctx.drawImage(blast,frame*192,0,192,192,cx-48,GROUND_Y-92,96,96);
+    }
     smokeColumn(cx-10, y+40, 1.7, 1.1);
     smokeColumn(cx+12, y+52, 1.4, 4.7);
     glow(cx, GROUND_Y-30, 62, "rgba(255,140,50,1)", Math.max(0, 0.5 - keep.ruin*0.12));
@@ -3460,6 +3566,40 @@ function drawKeep(keep, side){
 // full contrast. Without this a 20-unit scrum reads as a flat sticker sheet.
 function rankScale(row){ return 0.86 + (row/(ROWS-1))*0.22; }
 
+const SHEET_UNITS={
+  knight:{sheet:"warriorBlue",cols:6,walkRow:1,atkRow:2,atkCol:4},
+  paladin:{sheet:"warriorGold",cols:6,walkRow:1,atkRow:6,atkCol:4},
+  shieldmaiden:{sheet:"warriorBlue",cols:6,walkRow:1,atkRow:4,atkCol:4},
+  lancer:{sheet:"warriorGold",cols:6,walkRow:1,atkRow:5,atkCol:4},
+  duelist:{sheet:"warriorBlue",cols:6,walkRow:1,atkRow:7,atkCol:4},
+  archer:{sheet:"archerBlue",cols:8,walkRow:1,atkRow:3,atkCol:4},
+  ranger:{sheet:"archerGold",cols:8,walkRow:1,atkRow:4,atkCol:4},
+  crossbow:{sheet:"archerBlue",cols:8,walkRow:1,atkRow:5,atkCol:4},
+  falconer:{sheet:"archerGold",cols:8,walkRow:1,atkRow:2,atkCol:4},
+  runner:{sheet:"goblinTorch",cols:7,walkRow:1,atkRow:2,atkCol:4},
+  spear:{enemy:"goblinTorch",cols:7,walkRow:1,atkRow:3,atkCol:4},
+  archerEnemy:{sheet:"goblinTnt",cols:7,walkRow:1,atkRow:2,atkCol:4},
+  bomber:{sheet:"goblinTnt",cols:7,walkRow:1,atkRow:2,atkCol:4},
+  shield:{sheet:"goblinBarrel",cols:4,walkRow:1,atkRow:2,atkCol:2},
+};
+function drawSheetUnit(u,frame,k,pop){
+  let key=u.type==="archer"&&u.side<0?"archerEnemy":u.type;
+  let d=SHEET_UNITS[key];
+  if(d&&d.enemy&&u.side<0)d={...d,sheet:d.enemy};
+  if(!d||!d.sheet)return false;
+  const source=ART_SHEETS[d.sheet];
+  if(!source||!source.complete||!source.naturalWidth)return false;
+  const attacking=frame===4,row=attacking?d.atkRow:(u.fighting?0:d.walkRow);
+  const col=attacking?d.atkCol:(Math.floor(u.bob*.9)%d.cols);
+  const size=Math.round((u.T.bigTarget?64:56)*k),squash=1-pop*.18;
+  ctx.save();
+  if(u.side<0)ctx.scale(-1,1);
+  if(u.flash>0)ctx.filter="brightness(2.3) saturate(.5)";
+  ctx.drawImage(source,col*192,row*192,192,192,
+    Math.round(-size/2),Math.round(-size*squash),size,Math.round(size*squash));
+  ctx.restore();
+  return true;
+}
 function drawUnit(u){
   const S = SPR[u.type][u.side];
   const T = u.T;
@@ -3504,7 +3644,7 @@ function drawUnit(u){
   if(u.atkAnim>0.14) tilt=-.07*u.side;
   if(u.flash>0) tilt=.055*u.side;
   ctx.save(); ctx.translate(x,y); ctx.rotate(tilt);
-  ctx.drawImage(img, Math.round(-dw/2), -dh, dw, dh);
+  if(!drawSheetUnit(u,frame,k,pop)) ctx.drawImage(img, Math.round(-dw/2), -dh, dw, dh);
   ctx.restore();
   if(u.side>0){
     const skin=SKINS[(SAVE.equippedSkins||{}).army];
@@ -3714,6 +3854,7 @@ function useReserve(){
 const GEAR_BTN  = {x:W-34, y:6, w:26, h:20};
 const FORM_BTN={x:8,y:276,w:76,h:18};
 const RESERVE_BTN={x:88,y:276,w:82,h:18};
+const WARCRY_BTN={x:174,y:276,w:96,h:18};
 const TITLE_SET  = {x:W-104, y:8, w:92, h:24};
 const TDIFF_L    = {x:W/2-118, y:254, w:22, h:22};
 const TDIFF_V    = {x:W/2-92,  y:254, w:184, h:22};
@@ -3722,10 +3863,10 @@ const TDIFF_R    = {x:W/2+96,  y:254, w:22, h:22};
 //////////////////////////////////////////////////////////////////////////////
 // MENUS — layouts are pure functions so draw and hit-test can never disagree
 //////////////////////////////////////////////////////////////////////////////
-const PAUSE_ITEMS = ["RESUME","SETTINGS","RESTART","QUIT TO TITLE"];
 function pauseLayout(){
+  const items=["RESUME","SETTINGS","RESTART",G.mode==="arena"?"CASH OUT":"QUIT TO TITLE"];
   const bw=200, bh=28, gap=9, x=(W-bw)/2, y0=130;
-  return PAUSE_ITEMS.map((label,i)=>({label, x, y:y0+i*(bh+gap), w:bw, h:bh}));
+  return items.map((label,i)=>({label, x, y:y0+i*(bh+gap), w:bw, h:bh}));
 }
 const SETTINGS_ROWS = [
   {key:"difficulty",  label:"DIFFICULTY",     type:"choice"},
@@ -3890,6 +4031,7 @@ function menuClick(p){
       if(b.label==="RESUME")            G.overlay = null;
       else if(b.label==="SETTINGS")     G.overlay = "settings";
       else if(b.label==="RESTART")    { G.overlay = null; startBattle(); }
+      else if(b.label==="CASH OUT")   { G.overlay = null; endGame("CASHED OUT","The arena pays its debts."); }
       else if(b.label==="QUIT TO TITLE"){ G.overlay=null; G.endless=false;G.mode=null;reset(); G.scene="title"; G.sceneT=0; }
       return true;
     }
@@ -4063,7 +4205,9 @@ function drawHUD(){
       :battle().mechanic==="gates"?"BREAK THE MOUNTAIN GATES   ":"QUENCH THE WAR PYRES   ")+left+" LEFT";
     dc=left===1?"#a8ffd8":"#ffd0a0";
   } else if(obj.type === "endless"){
-    line="WAVE "+G.endlessWave+"   •   NEXT "+Math.max(0,Math.ceil(G.endlessNext-G.t))+"s";
+    line=G.mode==="arena"
+      ?"BOUNTY "+G.arenaGold+"   •   WAVE "+G.endlessWave+"   •   NEXT "+Math.max(0,Math.ceil(G.endlessNext-G.t))+"s"
+      :"WAVE "+G.endlessWave+"   •   NEXT "+Math.max(0,Math.ceil(G.endlessNext-G.t))+"s";
     dc=G.endlessWave%5===0?"#ffcf85":"#a8ffd8";
   } else {
     const dir = G.front > 50.5 ? "PUSHING" : G.front < 49.5 ? "GIVING GROUND" : "HOLDING";
@@ -4127,6 +4271,13 @@ function drawHUD(){
     G.reserveArmed?"#6b5220":"#33261a",P.panelD,P.panelL,2);
   txt(G.reserve?("DEPLOY "+TYPES[G.reserve].name.slice(0,7)):(G.reserveArmed?"PICK UNIT":"RESERVE [Q]"),
     RESERVE_BTN.x+RESERVE_BTN.w/2,RESERVE_BTN.y+12,6,"#ffe9a8","center",false);
+  panel(WARCRY_BTN.x,WARCRY_BTN.y,WARCRY_BTN.w,WARCRY_BTN.h,
+    G.momentum>=100?"#6f4925":"#292521",P.panelD,G.momentum>=100?"#f5d36e":"#554a3c",2);
+  px(WARCRY_BTN.x+3,WARCRY_BTN.y+WARCRY_BTN.h-3,
+    Math.round((WARCRY_BTN.w-6)*G.momentum/100),2,G.momentum>=100?"#ffe27a":"#ba863b");
+  txt(G.momentum>=100?"WAR CRY [SPACE]":"MORALE "+Math.floor(G.momentum)+"%",
+    WARCRY_BTN.x+WARCRY_BTN.w/2,WARCRY_BTN.y+12,6,
+    G.momentum>=100?"#fff2bd":"#c7b58f","center",false);
   txt("NEXT: "+(G.enemyPreview||"MUSTERING").slice(0,15),W-8,286,6,"#ffc98a","right",false);
 
   if((battle().objective||{}).type === "hold"){
@@ -4712,21 +4863,23 @@ function shopRows(){
   if(G.shopTab==="army"){
     for(const f of FOR_SALE) if(!TYPES[f.key].champion&&!SAVE.unlocked[f.key])
       rows.push({kind:"unit",key:f.key,name:TYPES[f.key].name,cost:f.cost,desc:f.desc});
-    UNIT_TRAINING.forEach(u=>{
-      if(!ownedUnits().includes(u.key)) return;
-      const l=unitLvl(u.key),max=2;
-      rows.push({kind:"training",key:u.key,name:u.name,cost:l>=max?null:100+l*90,
-        desc:u.desc,lvl:l,max});
+    ownedUnits().filter(key=>TYPES[key]&&!TYPES[key].champion).forEach(key=>{
+      const special=UNIT_TRAINING.find(u=>u.key===key),l=unitLvl(key),max=5;
+      rows.push({kind:"training",key,name:special?special.name:TYPES[key].name+" MASTERY",
+        cost:l>=max?null:100+l*90,
+        desc:(special?special.desc:"Improves health and damage each rank.")+"  Rank "+l+"/"+max,
+        lvl:l,max});
     });
   } else if(G.shopTab==="champions"){
     for(const f of FOR_SALE)if(TYPES[f.key].champion){
-      const owned=!!SAVE.unlocked[f.key],l=champLvl(f.key);
+      const owned=!!SAVE.unlocked[f.key],l=champLvl(f.key),max=5;
       rows.push({kind:"champion",key:f.key,name:TYPES[f.key].name,
-        cost:!owned?f.cost:l>=2?null:160+l*120,desc:owned?"Signature ability level "+l+"/2.":f.desc,l,max:2,owned});
+        cost:!owned?f.cost:l>=max?null:160+l*120,
+        desc:owned?"Signature ability rank "+l+"/"+max+".":f.desc,l,max,owned});
     }
   } else if(G.shopTab==="spells"){
     for(const [key,S] of Object.entries(SPELLS)){
-      const owned=!!(SAVE.unlockedSpells||{})[key],l=spellLvl(key),max=3;
+      const owned=!!(SAVE.unlockedSpells||{})[key],l=spellLvl(key),max=5;
       rows.push({kind:"spell",key,name:S.name,cost:!owned?S.unlock:l>=max?null:90+l*75,
         desc:owned?S.desc+"  Level "+l+"/"+max:S.desc,lvl:l,max,owned});
     }
@@ -4931,14 +5084,20 @@ const MODE_KEYS=Object.keys(MODE_DEFS);
 const MODE_BACK={x:W/2-70,y:326,w:140,h:24};
 function modeBox(i){return{x:48+(i%2)*278,y:72+Math.floor(i/2)*61,w:266,h:53};}
 function drawModes(){
-  px(0,0,W,H,"#18222a");
-  txt("THE WAR HALL",W/2,42,18,"#ffd75e","center");
-  txt("choose a doctrine for the next campaign",W/2,59,7,"#a9bec8","center",false);
+  px(0,0,W,H,"#151b25");
+  // Map-table rails turn this from a generic grid into a room in the keep.
+  px(20,18,W-40,2,"#6c4c2d");px(20,H-18,W-40,2,"#6c4c2d");
+  px(28,24,2,H-48,"#3b2d22");px(W-30,24,2,H-48,"#3b2d22");
+  txt("THE WAR HALL",W/2,40,20,"#f4cf69","center");
+  px(W/2-82,48,164,2,"#8d6b36");
+  txt("eight ways to test the line",W/2,61,8,"#b9c8ce","center",false);
   MODE_KEYS.forEach((k,i)=>{
     const M=MODE_DEFS[k],r=modeBox(i),hot=hoverMenu==="MODE"+k;
-    panel(r.x,r.y,r.w,r.h,hot?"#4f4530":"#29343b","#121a20",hot?"#d0ab53":"#52636b",2);
-    txt(M.name,r.x+12,r.y+17,10,hot?"#fff0b0":"#e5edf0","left");
-    txt(M.tag,r.x+12,r.y+31,6,"#a9bec8","left",false);
+    panel(r.x,r.y,r.w,r.h,hot?"#4a3d27":"#26313a","#10161e",hot?"#e0b956":"#52636b",2);
+    px(r.x+5,r.y+6,3,r.h-12,hot?"#f1cb61":"#7a6438");
+    txt(roman(i+1),r.x+15,r.y+19,11,hot?"#f6d777":"#8fa4ad","left");
+    txt(M.name,r.x+42,r.y+18,10,hot?"#fff0b0":"#e5edf0","left");
+    txt(M.tag,r.x+42,r.y+33,7,"#a9bec8","left",false);
     const best=(SAVE.modeBest||{})[k]||0;
     if(best)txt("BEST "+best,r.x+r.w-10,r.y+45,6,"#8fe0bd","right",false);
   });
@@ -4977,7 +5136,9 @@ function drawHomeScene(){
   for(const [k,side] of [[G.keepP,1],[G.keepE,-1]]){
     const cx = Math.round(sx(k.x));
     ctx.globalAlpha=.26; px(cx-30, GROUND_Y-4, 60, 7, "#000"); ctx.globalAlpha=1;
-    ctx.drawImage(KEEP[side][0], cx-KEEP_W/2-1, GROUND_Y-KEEP_H-1);
+    const castle=ART_SHEETS[side>0?"castleBlue":"castleRed"];
+    if(castle&&castle.complete&&castle.naturalWidth)ctx.drawImage(castle,cx-54,GROUND_Y-86,108,86);
+    else ctx.drawImage(KEEP[side][0], cx-KEEP_W/2-1, GROUND_Y-KEEP_H-1);
   }
   for(const b of G.banners){
     const set = BANNER[b.x<50?1:-1];
@@ -4991,18 +5152,27 @@ function drawHomeScene(){
 
 function drawTitle(){
   drawHomeScene();
-  px(0,0,W,H,"rgba(12,9,18,0.52)");
+  px(0,0,W,H,"rgba(10,13,22,0.58)");
   const bob = Math.sin(G.sceneT*1.6)*2;
-  txt("BANNERLINE", W/2, 92+bob, 40, "#f7e9b8", "center");
-  txt("BANNERLINE", W/2, 91+bob, 40, "#ffd75e", "center", false);
-  ribbon(W/2-104, 108, 208, 18, "#4a5560", "#2f3843", "#6d7a86");
-  txt("THE GROUND IS THE SCOREBOARD", W/2, 121, 8, "#dfe7ec", "center");
+  // Signature: a river-cut heraldic crest behind the wordmark.
+  ctx.save();ctx.translate(W/2-139,72+bob*.3);
+  px(-20,-20,40,39,"#1d2c3a");px(-17,-17,34,30,"#3f83a6");
+  px(-14,-14,28,10,"#e7c55d");px(-14,-1,28,4,"#b9e0e5");
+  px(-10,13,20,5,"#1d2c3a");px(-5,18,10,4,"#1d2c3a");
+  ctx.restore();
+  txt("BANNERLINE", W/2+13, 91+bob, 38, "#f5d878", "center");
+  px(W/2-124,100+bob,248,2,"#d3a948");
+  ribbon(W/2-112, 108, 224, 18, "#354451", "#18232d", "#687b88");
+  txt("THE GROUND IS THE SCOREBOARD", W/2, 121, 8, "#e8edf0", "center");
 
+  const homeMeta=["28 BATTLES","7 CHALLENGES","FIELD GUIDE","ACCESS"];
   HOME_BTN.forEach((b,i)=>{
     const r = homeBtn(i);
     const hot = hoverMenu === b.id;
-    panel(r.x, r.y, r.w, r.h, hot?"#5d4630":P.panel, P.panelD, P.panelL, 2);
-    txt(b.label, W/2, r.y+18, 12, hot?"#fff3c8":P.cream, "center");
+    panel(r.x, r.y, r.w, r.h, hot?"#61482a":"#2b2622", "#17130f", hot?"#e1bd5c":"#6b5435", 2);
+    px(r.x+5,r.y+5,3,r.h-10,hot?"#f5d36e":"#94723a");
+    txt(b.label,r.x+16,r.y+17,11,hot?"#fff3c8":"#f2e5c5","left");
+    txt(homeMeta[i],r.x+r.w-10,r.y+16,6,hot?"#f4cf69":"#988b78","right",false);
   });
   if(SAVE.progress > 1 && !SAVE.won)
     txt("battle "+roman(Math.min(SAVE.progress,BATTLES.length))+" awaits",
@@ -5204,7 +5374,8 @@ function drawResult(){
     ["UNITS SENT",    G.stats.sent],
     ["GOLD SPENT",    G.stats.spent],
     ["ENEMIES SLAIN", G.stats.kills],
-    ["RENOWN",        G.endless ? "+"+Math.min(160,10+G.endlessWave*4)
+    ["RENOWN",        G.mode==="arena" ? "+"+G.arenaGold
+                      :G.endless ? "+"+Math.min(160,10+G.endlessWave*4)
                       :(G.over&&G.over.title==="VICTORY")?"+"+(G.battle>=SAVE.progress-1?120:40):"0"],
     [G.endless?"TIME HELD":"KEEP REMAINING",
       G.endless ? Math.floor(G.t/60)+":"+String(Math.floor(G.t%60)).padStart(2,"0")
@@ -5355,6 +5526,7 @@ cv.addEventListener("mousemove", e=>{
     if(inBox(p,SPEED_BTN)) hot=true;
     if(inBox(p,FORM_BTN)) hot=true;
     if(inBox(p,RESERVE_BTN))hot=true;
+    if(inBox(p,WARCRY_BTN))hot=true;
     for(let i=0;i<2;i++) if(inBox(p,spellBtn(i))) hot=true;
   }
   cv.style.cursor = hot ? "pointer" : "default";
@@ -5422,6 +5594,7 @@ cv.addEventListener("pointerdown", e=>{
   if(inBox(p,SPEED_BTN)){ cycleSpeed(); return; }
   if(inBox(p,FORM_BTN)){cycleFormation();return;}
   if(inBox(p,RESERVE_BTN)){useReserve();return;}
+  if(inBox(p,WARCRY_BTN)){warCry();return;}
   if(inBox(p,GEAR_BTN)){ G.overlay="pause"; return; }
   if((world().vertical && p.x>120&&p.x<W-120&&p.y>100&&p.y<300) ||
      (!world().vertical && p.y > BAND_TOP-8 && p.y < BAND_BOT+8)){
@@ -5451,7 +5624,7 @@ addEventListener("keydown", e=>{
   }
   else if(k==="6"){ const s=equippedSpells()[0]; if(s) castSpell(s); }
   else if(k==="7"){ const s=equippedSpells()[1]; if(s) castSpell(s); }
-  else if(k===" " || k==="spacebar") return;
+  else if(k===" " || k==="spacebar") warCry();
   else if(k==="s") cycleSpeed();
   else if(k==="f") cycleFormation();
   else if(k==="q") useReserve();
@@ -5549,7 +5722,7 @@ if(location.hostname==="127.0.0.1" || location.hostname==="localhost"){
     G.tut.on=false;
   }
   const previewScene=previewParams.get("scene");
-  if(["map","shop","bestiary","warband"].includes(previewScene)){
+  if(["title","map","modes","shop","bestiary","warband"].includes(previewScene)){
     G.scene=previewScene; G.sceneT=0;
     if(previewScene==="shop") G.shopTab=previewParams.get("tab")||"army";
   }
@@ -5580,7 +5753,8 @@ window.__bannerline = {
   setDiff(v){ OPT.difficulty = v; }, getDiff(){ return DIFF[OPT.difficulty].name; },
   tutStart, tutStep, tutFinish, TUT,
   SAVE, saveGame, wipeSave, UPGRADES, SPELLS, UNIT_TRAINING, roster, BATTLES,
-  ownedUnits, LOADOUT_MAX, castSpell, cycleSpeed, startEndless, startMode, MODE_DEFS, BOSS_ROSTER, SKINS,
+  ownedUnits, LOADOUT_MAX, castSpell, cycleSpeed, warCry, gainMomentum,
+  startEndless, startMode, MODE_DEFS, BOSS_ROSTER, SKINS,
   sim(seconds, policy){
     reset();
     const dt = 1/30;
@@ -5624,8 +5798,8 @@ window.__bannerline = {
     const saved=JSON.stringify(SAVE),oldMode=G.mode,oldEndless=G.endless,rows=[];
     for(const key of Object.keys(MODE_DEFS)){
       G.mode=key;G.endless=true;G.battle=1;G.endlessWorld=MODE_DEFS[key].world||0;reset();G.scene="sim";
-      if(!["endless","draft"].includes(key)){G.keepP.max=G.keepP.hp=99999;}
-      const limit=["endless","draft"].includes(key)?240:260,dt=1/30;
+      if(!["endless","arena","draft"].includes(key)){G.keepP.max=G.keepP.hp=99999;}
+      const limit=["endless","arena","draft"].includes(key)?240:260,dt=1/30;
       for(let i=0;i<limit/dt&&!G.over;i++){
         if(i%18===0){
           const list=roster(),pick=list[i/18%list.length];

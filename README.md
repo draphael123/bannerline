@@ -90,9 +90,11 @@ motion. A run awards renown and permanently records the highest wave reached.
 
 ## War Modes
 
-The War Hall contains seven modes that share the player's persistent army:
+The War Hall contains eight modes that share the player's persistent army:
 
 - **Endless** — escalating waves, rotating regions, and a boss every fifth wave.
+- **Bounty Arena** — a repeatable renown grind where every kill pays a bounty;
+  elite enemies and bosses are worth more.
 - **Boss Rush** — an expandable boss registry with a recovery choice between encounters.
 - **Siege Defense** — a two-minute castle-centered defense.
 - **Daily Challenge** — a date-seeded field with fixed army, spells, and difficulty.
@@ -114,6 +116,11 @@ Champions are expensive mortal deployments—not free permanent heroes. Only one
 Champion may be placed in a five-unit warband. Paladin, Standard-Bearer,
 Beastmaster, Runesmith, Stormcaller, Royal Engineer, and Dragon Rider each have
 an automatic signature ability and two ability-upgrade levels.
+
+Every specialist has a distinct silhouette and equipment treatment. Core
+knights, archers, goblins, castles, trees, and combat effects use selected art
+from Pixel Frog's legacy **Tiny Swords** CC0 release. Source and license details
+live beside the imported files in `assets/sprites/tiny-swords/SOURCE.md`.
 
 ## Boss encounters
 
@@ -137,6 +144,9 @@ bosses and automatically appear in Boss Rush.
 - Earn two temporary veterancy ranks during battle.
 - Hunt rare enemy field commanders that strengthen nearby troops.
 - Complete optional objectives and choose post-battle spoils.
+- Build **Morale** through kills, large targets, and captured ground. At 100%,
+  trigger **War Cry** with `Space` (or the battlefield button) for a short
+  army-wide rally and guard window.
 
 ## Lanes
 
@@ -196,9 +206,10 @@ Winning a battle pays **renown** (120 first clear, 40 on a replay). Spend it wit
 
 The Quartermaster has separate **Army**, **Champions**, **Spells**, **Castle**,
 and **Armory** ledgers.
-The Army adds the elite Ranger and Paladin, plus two training levels for
-Spearmen, Knights, Archers, and Mages. Training adds a visible battlefield
-behavior: brace, shield wall, volley, or arcane surge. Castle construction adds
+Every owned regular unit has five mastery ranks. Core unit training also adds
+a visible battlefield behavior: brace, shield wall, volley, or arcane surge.
+Champion abilities and spells have five ranks, while castle projects have four
+or five ranks according to their safe gameplay limit. Castle construction adds
 a visible slowing moat and an area-firing mage tower alongside the existing
 walls, ballista, oil, coffers, and muster upgrades.
 
@@ -207,7 +218,7 @@ deployment effects, and victory effects. Cosmetics never change combat stats.
 
 ## Spells
 
-Spells are unlocked and upgraded with renown. You begin with one command seal;
+Spells are unlocked and upgraded through five ranks with renown. You begin with one command seal;
 a second spell slot is a major store unlock, and two is the permanent maximum.
 Both spells target the currently selected lane and recharge during battle:
 
